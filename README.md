@@ -1,10 +1,29 @@
-# Saans
+<h1 align="center">Saans</h1>
 
-**A family air copilot for severe winter smog and urban air pollution.**
+<p align="center">
+  <strong>A family air copilot for severe winter smog and urban air pollution.</strong><br />
+  <sub>Location-aware plans · indoor-air hacks · pollutant reports · grounded AI</sub>
+</p>
 
-[Repository](https://github.com/amardeepio/Saans) · [CI](https://github.com/amardeepio/Saans/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/amardeepio/Saans/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/amardeepio/Saans/actions/workflows/ci.yml/badge.svg?branch=main" /></a>
+  <img alt="TypeScript 5.9" src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white" />
+  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white" />
+  <img alt="56 tests passing" src="https://img.shields.io/badge/tests-56%20passing-2f7d57?style=flat-square&logo=vitest&logoColor=white" />
+  <img alt="Code coverage 81.8 percent" src="https://img.shields.io/badge/coverage-81.8%25-2f7d57?style=flat-square&logo=vitest&logoColor=white" />
+  <img alt="Axe accessibility: 0 violations" src="https://img.shields.io/badge/accessibility-axe%200%20violations-143c31?style=flat-square" />
+  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-d9f36a?style=flat-square" />
+</p>
 
-Saans (Hindi for “breath”) turns a city’s live air quality into a practical, low-emission plan for a real household. It combines location, household vulnerability, home energy use, daily mobility and budget to answer three questions:
+<p align="center">
+  <a href="https://github.com/amardeepio/Saans">Repository</a>
+  ·
+  <a href="https://github.com/amardeepio/Saans/issues">Issues</a>
+  <br />
+  <sub>Saans means breath.</sub>
+</p>
+
+Saans turns a city’s live air quality into a practical, low-emission plan for a real household. It combines location, household vulnerability, home energy use, daily mobility and budget to answer three questions:
 
 1. **What should we do today?**
 2. **What will actually make a difference?**
@@ -37,6 +56,23 @@ The experience is a location-aware dashboard and a grounded AI chat assistant th
     <td><sub>Click any metro card for a complete city air report.</sub></td>
   </tr>
 </table>
+
+---
+
+## Quality at a glance
+
+| Signal | Result |
+| --- | --- |
+| **Language** | TypeScript strict mode, zero type errors |
+| **Tests** | 56 tests across 11 files |
+| **Line coverage** | **81.78%** |
+| **Statement coverage** | 78.37% |
+| **Function coverage** | 80.67% |
+| **Branch coverage** | 63.76% |
+| **Accessibility** | 0 axe-core WCAG 2.1 A/AA violations on home, dashboard, setup, chat and mobile |
+| **Build** | Passing Next.js production build |
+
+Coverage is measured across the core TypeScript logic in `lib/` and enforced in CI with minimum thresholds. Run `npm run test:coverage` to reproduce it locally.
 
 ---
 
@@ -207,7 +243,7 @@ lib/
   india.ts                   India-only filtering and tracked-city universe
   validation.ts              Input clamping and local-storage schema
   rate-limit.ts              Small in-memory limiter
-tests/                       51 unit tests (engine, AI guard, pollutants…)
+tests/                       56 unit tests (engine, AI guard, pollutants…)
 ```
 
 ---
@@ -245,6 +281,7 @@ npm run build      # Production build
 npm run start      # Serve production build
 npm run typecheck  # Strict TypeScript
 npm test           # Vitest unit suite
+npm run test:coverage  # Vitest with V8 coverage + thresholds
 npm run check      # typecheck + tests + build
 ```
 
@@ -267,13 +304,26 @@ The suite covers:
 - Local assistant intent routing, medical red flags and script-injection attempts
 - GenAI markdown cleanup, unsafe-output rejection and offline fallback
 - Profile/air input clamping, versioned storage and malformed data
+- Number, currency and time formatting, including date/time fallbacks
 - Rate-limit windows and proxy key derivation
 
-**51 tests across 10 files.** Run:
+**56 tests across 11 files.** Run:
 
 ```bash
 npm test
+npm run test:coverage
 ```
+
+Latest coverage run:
+
+| Metric | Coverage |
+| --- | ---: |
+| Lines | 81.78% |
+| Statements | 78.37% |
+| Functions | 80.67% |
+| Branches | 63.76% |
+
+The CI workflow fails below 80% lines, 75% statements, 75% functions or 60% branches across `lib/`.
 
 ### Accessibility
 

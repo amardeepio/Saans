@@ -31,8 +31,11 @@ export function formatObservedAt(value: string): string {
   }).format(date);
 }
 
-export function pluralise(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`;
+export function pluralise(count: number, singular: string, plural?: string): string {
+  const fallbackPlural = /[^aeiou]y$/i.test(singular)
+    ? `${singular.slice(0, -1)}ies`
+    : `${singular}s`;
+  return `${count} ${count === 1 ? singular : (plural ?? fallbackPlural)}`;
 }
 
 export function relativeFreshness(value: string): string {
