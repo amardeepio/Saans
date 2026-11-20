@@ -1,7 +1,15 @@
 import { sensitiveGroups } from "@/lib/aqi";
 import { formatDecimal, formatInr, formatObservedAt, formatNumber } from "@/lib/format";
+import type { HabitSummary } from "@/lib/habits";
+import { translate } from "@/lib/i18n";
 import type { Advice, AirReading, PlanAction, Profile } from "@/lib/types";
+import { AirCurve } from "./AirCurve";
+import { AtmosphereCard } from "./AtmosphereCard";
+import { GrapNotice } from "./GrapNotice";
+import { DoneToggle, HabitCard, HabitRing } from "./HabitProgress";
 import { Icon, type IconName } from "./Icon";
+import { ListenButton } from "./ListenButton";
+import { usePreferences } from "./PreferencesProvider";
 
 const CATEGORY_ICONS: Record<PlanAction["category"], IconName> = {
   health: "shield",
@@ -44,33 +52,43 @@ function ActionItem({
   action,
   top,
   index,
+  done,
+  onToggle,
+  locale,
 }: {
   action: PlanAction;
   top: boolean;
   index: number;
+  done: boolean;
+  onToggle: () => void;
+  locale: "en" | "hi";
 }) {
   return (
-    <li className={`timeline-item ${top ? "is-top" : ""}`}>
+    <li className={`timeline-item ${top ? "is-top" : ""} ${done ? "is-done" : ""}`}>
       <div className="timeline-marker" aria-hidden="true">
         <span className={`timeline-dot category-${action.category}`} />
       </div>
       <details className="action-detail" open={index === 0}>
         <summary>
-          <div className="action-summary-main">
-            <div className="action-meta">
-              <span className="action-time">
-                <Icon name="clock" size={13} />
-                {action.timeLabel}
-              </span>
-              <span className={`action-category category-${action.category}`}>
-                <Icon name={CATEGORY_ICONS[action.category]} size={13} />
-                {action.categoryLabel}
-              </span>
-              {top && <span className="start-here">Start here</span>}
+          <div className="action-summary-row">
+            <DoneToggle checked={done} onChange={onToggle} />
+            <div className="action-summary-main">
+              <div className="action-meta">
+                <span className="action-time">
+                  <Icon name="clock" size={13} />
+                  {action.timeLabel}
+                </span>
+                <span className={`action-category category-${action.category}`}>
+                  <Icon name={CATEGORY_ICONS[action.category]} size={13} />
+                  {action.categoryLabel}
+                </span>
+                {top && <span className="start-here">{translate(locale, "playbook.startHere")}</span>}
+                {done && <span className="done-label">{translate(locale, "playbook.done")}</span>}
+              </div>
+              <h3>{action.title}</h3>
+              <p>{action.summary}</p>
+              <ImpactChips action={action} />
             </div>
-            <h3>{action.title}</h3>
-            <p>{action.summary}</p>
-            <ImpactChips action={action} />
           </div>
           <span className="detail-chevron" aria-hidden="true">
             <Icon name="chevron" size={18} />
@@ -78,15 +96,20 @@ function ActionItem({
         </summary>
         <div className="action-expanded">
           <div className="action-steps">
-            <span className="micro-label">Do this</span>
+            <span className="micro-label">{translate(locale, "playbook.doThis")}</span>
             <ol>
               {action.steps.map((step) => (
                 <li key={step}>{step}</li>
               ))}
             </ol>
+            <ListenButton
+              text={`${action.title}. ${action.summary}. ${action.steps.join(". ")}`}
+              locale={locale}
+              label={translate(locale, "playbook.doThis")}
+            />
           </div>
           <div className="action-why">
-            <span className="micro-label">Why it works</span>
+            <span className="micro-label">{translate(locale, "playbook.whyWorks")}</span>
             <p>{action.why}</p>
             <div className="action-tags">
               {action.tags.map((tag) => (
@@ -100,79 +123,83 @@ function ActionItem({
   );
 }
 
-function WindowCard({ advice }: { advice: Advice }) {
+function WindowCard({ advice, locale }: { advice: Advice; locale: "en" | "hi" }) {
   const best = advice.windows.best;
   const worst = advice.windows.worst;
   return (
     <div className="rail-card windows-card">
       <div className="rail-heading">
-        <span className="eyebrow">Outdoor clock</span>
+        <span className="eyebrow">{translate(locale, "playbook.outdoorClock")}</span>
         <Icon name="sun" size={18} />
       </div>
       <div className="window-row window-row--best">
         <div>
-          <span className="window-kicker">Cleanest window</span>
+          <span className="window-kicker">{translate(locale, "playbook.cleanest")}</span>
           <strong>{best.label}</strong>
-          <small>AQI ≈ {formatNumber(best.aqi)}</small>
+          <small>
+            {advice.measurement.scaleLabel} ≈ {formatNumber(best.displayAqi)}
+          </small>
         </div>
         <span className={`window-badge verdict-${best.verdict}`}>
-          {best.verdict === "good" ? "Go outside" : best.verdict === "short" ? "Keep it short" : "Stay in"}
+          {best.verdict === "good"
+            ? translate(locale, "playbook.goOutside")
+            : best.verdict === "short"
+              ? translate(locale, "playbook.keepShort")
+              : translate(locale, "playbook.stayIn")}
         </span>
       </div>
       <p className="window-detail">{best.detail}</p>
       <div className="window-row window-row--worst">
         <div>
-          <span className="window-kicker">Roughest air</span>
+          <span className="window-kicker">{translate(locale, "playbook.roughest")}</span>
           <strong>{worst.label}</strong>
-          <small>AQI ≈ {formatNumber(worst.aqi)}</small>
+          <small>
+            {advice.measurement.scaleLabel} ≈ {formatNumber(worst.displayAqi)}
+          </small>
         </div>
       </div>
     </div>
   );
 }
 
-function LedgerCard({ advice }: { advice: Advice }) {
+function LedgerCard({ advice, locale }: { advice: Advice; locale: "en" | "hi" }) {
   const ledger = advice.ledger;
   return (
     <div className="rail-card ledger-card">
       <div className="rail-heading">
-        <span className="eyebrow">Your modelled impact</span>
+        <span className="eyebrow">{translate(locale, "playbook.impact")}</span>
         <Icon name="spark" size={18} />
       </div>
       <div className="ledger-hero">
         <strong>≤{ledger.exposurePct}%</strong>
-        <span>less daily PM2.5 exposure, modelled, if you follow the plan</span>
+        <span>{translate(locale, "playbook.exposureHero")}</span>
       </div>
       <div className="ledger-bar" aria-hidden="true">
         <span style={{ width: `${Math.min(100, ledger.exposurePct)}%` }} />
       </div>
       <dl className="ledger-list">
         <div>
-          <dt>Carbon avoided</dt>
+          <dt>{translate(locale, "playbook.carbonAvoided")}</dt>
           <dd>{formatDecimal(ledger.co2eKgMonth)} kg CO₂e / mo</dd>
         </div>
         <div>
-          <dt>Net monthly cost</dt>
+          <dt>{translate(locale, "playbook.netCost")}</dt>
           <dd>
             {ledger.costInrMonth >= 0
-              ? `${formatInr(ledger.costInrMonth)} saved`
-              : `${formatInr(ledger.costInrMonth)} cost`}
+              ? `${formatInr(ledger.costInrMonth)} ${translate(locale, "ribbon.saved")}`
+              : `${formatInr(ledger.costInrMonth)} ${translate(locale, "ribbon.costLabel")}`}
           </dd>
         </div>
         <div>
-          <dt>Actions in plan</dt>
-          <dd>{ledger.actionsCount} tuned to your week</dd>
+          <dt>{translate(locale, "playbook.actionsInPlan")}</dt>
+          <dd>{ledger.actionsCount}</dd>
         </div>
       </dl>
       <details className="method-note">
         <summary>
-          <Icon name="info" size={14} /> How these estimates work
+          <Icon name="info" size={14} /> {translate(locale, "playbook.howEstimates")}
         </summary>
-        <p>
-          Exposure reductions are rough, additive-with-diminishing-returns comparisons between
-          actions. They are not measurements, medical advice or a guarantee. Carbon and cost
-          figures use typical Indian fuel and electricity assumptions and will vary by home.
-        </p>
+        <p>{translate(locale, "playbook.estimatesBody")}</p>
       </details>
     </div>
   );
@@ -182,27 +209,62 @@ export function Playbook({
   profile,
   air,
   advice,
+  completed,
+  onToggle,
+  streak,
+  week,
 }: {
   profile: Profile;
   air: AirReading;
   advice: Advice;
+  completed: string[];
+  onToggle: (actionId: string) => void;
+  streak: number;
+  week: HabitSummary[];
 }) {
+  const { settings } = usePreferences();
+  const locale = settings.locale;
   const groups = sensitiveGroups(profile.household);
   const sourceLabel =
-    air.source === "open-meteo" ? "Live Open-Meteo reading" : "Sample winter pattern";
+    air.source === "open-meteo"
+      ? translate(locale, "playbook.sourceLive")
+      : translate(locale, "playbook.sourceSample");
+  const doneCount = advice.actions.filter((action) => completed.includes(action.id)).length;
+  const percent = advice.actions.length
+    ? Math.round((doneCount / advice.actions.length) * 100)
+    : 0;
+  const listenText = `${advice.headline}. ${advice.summary}. ${advice.actions
+    .map((action) => `${action.title}. ${action.summary}`)
+    .join(" ")}`;
 
   return (
     <section id="playbook" className="section playbook-section" aria-labelledby="playbook-title">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">The daily playbook</span>
-          <h2 id="playbook-title">Today, in the order it happens.</h2>
+          <span className="eyebrow">{translate(locale, "playbook.eyebrow")}</span>
+          <h2 id="playbook-title">{translate(locale, "playbook.title")}</h2>
         </div>
-        <p className="section-intro">
-          {advice.actions.length} practical moves, weighted for your household and budget. Open any
-          card for the steps and the reasoning.
-        </p>
+        <div className="section-heading-side">
+          <p className="section-intro">
+            {advice.actions.length} {translate(locale, "playbook.intro")}
+          </p>
+          <div className="heading-tools">
+            <HabitRing completed={doneCount} total={advice.actions.length} percent={percent} />
+            <ListenButton
+              text={listenText}
+              locale={locale}
+              label={translate(locale, "curve.title")}
+            />
+          </div>
+        </div>
       </div>
+
+      <AirCurve
+        hourly={air.hourly}
+        standard={settings.aqiStandard}
+        bestLabel={advice.windows.best.label}
+        worstLabel={advice.windows.worst.label}
+      />
 
       <div className="playbook-layout">
         <ol className="timeline" aria-label="Today's actions in time order">
@@ -212,6 +274,9 @@ export function Playbook({
               action={action}
               top={action.id === advice.topAction.id}
               index={index}
+              done={completed.includes(action.id)}
+              onToggle={() => onToggle(action.id)}
+              locale={locale}
             />
           ))}
         </ol>
@@ -219,23 +284,26 @@ export function Playbook({
         <aside className="playbook-rail" aria-label="Today's context">
           <div className={`rail-card risk-card risk-${advice.risk}`}>
             <div className="rail-heading">
-              <span className="eyebrow">Household read</span>
+              <span className="eyebrow">{translate(locale, "playbook.householdRead")}</span>
               <span className="risk-dot" aria-hidden="true" />
             </div>
             <h3>{advice.riskLabel}</h3>
             <p>
               {groups.length > 0
-                ? `Extra care is weighted for ${groups.join(", ")}.`
-                : "No sensitive groups were added, so the plan focuses on broad, low-effort protection."}
+                ? `${translate(locale, "playbook.extraCare")} ${groups.join(", ")}.`
+                : translate(locale, "playbook.broad")}
             </p>
             {advice.alert && <div className="alert-note">{advice.alert}</div>}
           </div>
 
-          <WindowCard advice={advice} />
-          <LedgerCard advice={advice} />
+          <GrapNotice grap={advice.grap} />
+          <WindowCard advice={advice} locale={locale} />
+          <AtmosphereCard atmosphere={advice.atmosphere} />
+          <HabitCard streak={streak} week={week} />
+          <LedgerCard advice={advice} locale={locale} />
 
           <div className="rail-card source-card">
-            <span className="eyebrow">Behind the reading</span>
+            <span className="eyebrow">{translate(locale, "playbook.behindReading")}</span>
             <p>
               <strong>{sourceLabel}</strong> · {formatObservedAt(air.observedAt)}
             </p>
@@ -244,13 +312,9 @@ export function Playbook({
             </p>
             <details className="method-note">
               <summary>
-                <Icon name="info" size={14} /> About the numbers
+                <Icon name="info" size={14} /> {translate(locale, "playbook.aboutNumbers")}
               </summary>
-              <p>
-                AQI follows the US EPA scale, calculated from PM2.5 when the provider does not
-                return it. The forecast clock uses the next 24 hourly points. Click the playbook
-                for the assumptions behind each action.
-              </p>
+              <p>{translate(locale, "playbook.aboutNumbersBody")}</p>
             </details>
           </div>
         </aside>

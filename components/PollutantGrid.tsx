@@ -5,7 +5,8 @@ import {
   pollutantGuidelineText,
   type PollutantInfo,
 } from "@/lib/pollutants";
-import type { PollutantReadings } from "@/lib/types";
+import { pollutantSubIndex } from "@/lib/naqi";
+import type { AqiStandard, PollutantReadings } from "@/lib/types";
 import { PollutantGlyph } from "./PollutantGlyph";
 
 function formattedValue(pollutant: PollutantInfo, readings: PollutantReadings): string {
@@ -17,18 +18,26 @@ function formattedValue(pollutant: PollutantInfo, readings: PollutantReadings): 
   return value.toFixed(1);
 }
 
-export function PollutantGrid({ readings }: { readings: PollutantReadings }) {
+export function PollutantGrid({
+  readings,
+  standard,
+}: {
+  readings: PollutantReadings;
+  standard?: AqiStandard;
+}) {
   return (
     <div className="pollutant-grid">
       {POLLUTANTS.map((pollutant) => {
         const value = formattedValue(pollutant, readings);
         const guideline = pollutantGuidelineText(pollutant, readings);
+        const subIndex =
+          standard === "naqi" ? pollutantSubIndex(pollutant.key, readings[pollutant.key]) : null;
         return (
           <article
             key={pollutant.key}
             className="pollutant-card"
             style={{ "--pollutant-accent": pollutant.accent } as CSSProperties}
-            aria-label={`${pollutant.label} ${pollutant.formula}: ${value} ${pollutant.unit}. ${guideline}.`}
+            aria-label={`${pollutant.label} ${pollutant.formula}: ${value} ${pollutant.unit}. ${guideline}.${subIndex !== null ? ` NAQI sub-index ${subIndex}.` : ""}`}
           >
             <div className="pollutant-card-top">
               <span className="pollutant-icon" aria-hidden="true">
@@ -47,6 +56,9 @@ export function PollutantGrid({ readings }: { readings: PollutantReadings }) {
             <span className="pollutant-guideline">
               {pollutant.guidelineLabel} · {guideline}
             </span>
+            {subIndex !== null && (
+              <span className="pollutant-subindex">NAQI sub-index {subIndex}</span>
+            )}
           </article>
         );
       })}

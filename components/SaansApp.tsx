@@ -1,11 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  alertDedupeKey,
+  markAlertShown,
+  sendLocalNotification,
+  shouldAlert,
+  wasAlertShown,
+} from "@/lib/alerts";
 import { DEFAULT_PROFILE } from "@/lib/cities";
 import { buildAdvice } from "@/lib/engine";
 import { formatDecimal, formatInr, formatNumber, formatObservedAt } from "@/lib/format";
+import {
+  completionFor,
+  emptyHabits,
+  habitStreak,
+  loadHabits,
+  localDateKey,
+  saveHabits,
+  toggleHabit,
+  weeklySummary,
+  type HabitState,
+} from "@/lib/habits";
+import { translate } from "@/lib/i18n";
+import { applyAdviceTranslations, collectAdviceStrings } from "@/lib/localize-advice";
+import { cacheReading, getCachedReading } from "@/lib/offline";
 import { sampleReading } from "@/lib/sample-air";
-import type { AirReading, Profile } from "@/lib/types";
+import type { Advice, AirReading, Profile } from "@/lib/types";
 import {
   deserialiseProfile,
   PROFILE_STORAGE_KEY,
@@ -13,12 +34,15 @@ import {
   serialiseProfile,
 } from "@/lib/validation";
 import { AqiOrb } from "./AqiOrb";
+import { AqiScaleToggle } from "./AqiScaleToggle";
 import { Assistant } from "./Assistant";
 import { ChoiceLab } from "./ChoiceLab";
 import { CityPulse } from "./CityPulse";
 import { Icon } from "./Icon";
 import { Logo } from "./Logo";
 import { Playbook } from "./Playbook";
+import { usePreferences } from "./PreferencesProvider";
+import { SettingsDialog } from "./SettingsDialog";
 import { SetupDialog } from "./SetupDialog";
 import { CommunitySection, SwapsSection } from "./SwapsSection";
 import { WeatherGlyph } from "./WeatherGlyph";
@@ -36,13 +60,19 @@ function cityQuery(city: Profile["city"]): string {
 }
 
 export function SaansApp() {
+  const { settings } = usePreferences();
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [personalised, setPersonalised] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [air, setAir] = useState<AirReading | null>(null);
   const [airLoading, setAirLoading] = useState(true);
+  const [usedCached, setUsedCached] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [habits, setHabits] = useState<HabitState>(() => emptyHabits());
+  const [habitsReady, setHabitsReady] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -51,6 +81,8 @@ export function SaansApp() {
       setProfile(saved);
       setPersonalised(true);
     }
+    setHabits(loadHabits());
+    setHabitsReady(true);
     setHydrated(true);
   }, []);
 
@@ -61,6 +93,7 @@ export function SaansApp() {
     requestRef.current = controller;
     setAirLoading(true);
     setAir(null);
+    setUsedCached(false);
 
     const signal = AbortSignal.any([
       controller.signal,
@@ -75,11 +108,19 @@ export function SaansApp() {
         return reading;
       })
       .then((reading) => {
-        if (!controller.signal.aborted) setAir(reading);
+        if (controller.signal.aborted) return;
+        setAir(reading);
+        cacheReading(reading);
       })
       .catch((error) => {
         if ((error as Error).name === "AbortError") return;
-        setAir(sampleReading(profile.city));
+        const cached = getCachedReading(profile.city.id);
+        if (cached) {
+          setAir(cached);
+          setUsedCached(true);
+        } else {
+          setAir(sampleReading(profile.city));
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setAirLoading(false);
@@ -88,7 +129,85 @@ export function SaansApp() {
     return () => controller.abort();
   }, [hydrated, profile.city]);
 
-  const advice = useMemo(() => (air ? buildAdvice(profile, air) : null), [profile, air]);
+  const baseAdvice = useMemo(
+    () => (air ? buildAdvice(profile, air, settings.aqiStandard) : null),
+    [profile, air, settings.aqiStandard],
+  );
+  const [localizedAdvice, setLocalizedAdvice] = useState<Advice | null>(null);
+
+  useEffect(() => {
+    if (!baseAdvice || settings.locale === "en") {
+      setLocalizedAdvice(null);
+      return;
+    }
+    let cancelled = false;
+    const texts = collectAdviceStrings(baseAdvice);
+    fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texts, target: "hi" }),
+      signal: AbortSignal.timeout(20_000),
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as { translations?: string[] };
+      })
+      .then((data) => {
+        if (cancelled) return;
+        if (Array.isArray(data?.translations) && data.translations.length === texts.length) {
+          setLocalizedAdvice(applyAdviceTranslations(baseAdvice, data.translations));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLocalizedAdvice(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [baseAdvice, settings.locale]);
+
+  const advice = localizedAdvice ?? baseAdvice;
+
+  const todayKey = localDateKey();
+  const todayCompletion = useMemo(
+    () =>
+      advice
+        ? completionFor(
+            habits,
+            todayKey,
+            advice.actions.map((action) => action.id),
+          )
+        : { completed: [], total: 0, percent: 0 },
+    [habits, todayKey, advice],
+  );
+  const streak = useMemo(() => habitStreak(habits, todayKey), [habits, todayKey]);
+  const week = useMemo(() => weeklySummary(habits, todayKey), [habits, todayKey]);
+
+  const toggleAction = useCallback(
+    (actionId: string) => {
+      if (!advice) return;
+      const planIds = advice.actions.map((action) => action.id);
+      setHabits((current) => {
+        const next = toggleHabit(current, todayKey, actionId, planIds);
+        saveHabits(next);
+        return next;
+      });
+    },
+    [advice, todayKey],
+  );
+
+  useEffect(() => {
+    if (!advice || !habitsReady) return;
+    const key = alertDedupeKey(advice.measurement);
+    if (shouldAlert(advice.measurement, settings.alerts) && !wasAlertShown(key)) {
+      setAlertVisible(true);
+      markAlertShown(key);
+      sendLocalNotification(
+        "Saans air alert",
+        `${advice.measurement.scaleLabel} is ${advice.measurement.value} in ${profile.city.name}. ${advice.topAction.title}.`,
+      );
+    }
+  }, [advice, habitsReady, settings.alerts, profile.city.name]);
 
   const saveProfile = useCallback((next: Profile) => {
     setProfile(next);
@@ -101,45 +220,80 @@ export function SaansApp() {
     }
   }, []);
 
-  const sourceNote =
-    air?.source === "open-meteo"
-      ? "Live air · Open-Meteo"
+  const sourceNote = usedCached
+    ? `${translate(settings.locale, "offline.cached")} · ${air ? formatObservedAt(air.observedAt) : ""}`
+    : air?.source === "open-meteo"
+      ? translate(settings.locale, "header.live")
       : air
-        ? "Sample air pattern"
-        : "Reading the sky";
+        ? translate(settings.locale, "header.sample")
+        : translate(settings.locale, "header.reading");
 
   return (
     <div id="top" className="app-shell">
       <a className="skip-link" href="#playbook">
-        Skip to today&apos;s plan
+        {translate(settings.locale, "hero.seePlan")}
       </a>
 
       <header className="site-header">
         <div className="header-inner">
-          <a href="#top" className="brand" aria-label="Saans home">
+          <a href="#top" className="brand" aria-label={translate(settings.locale, "brand.home")}>
             <Logo />
           </a>
           <nav className="main-nav" aria-label="Primary navigation">
-            <a href="#playbook">Today</a>
-            <a href="#choices">Choices</a>
-            <a href="/dashboard">Dashboard</a>
+            <a href="#playbook">{translate(settings.locale, "nav.today")}</a>
+            <a href="#choices">{translate(settings.locale, "nav.choices")}</a>
+            <a href="/dashboard">{translate(settings.locale, "nav.dashboard")}</a>
             <button type="button" className="nav-button" onClick={() => setAssistantOpen(true)}>
-              Ask
+              {translate(settings.locale, "nav.ask")}
             </button>
-            <a href="#community">Community</a>
+            <a href="#community">{translate(settings.locale, "nav.community")}</a>
           </nav>
           <div className="header-actions">
+            <AqiScaleToggle compact />
             <span className="live-pill" title="Air-quality data source">
               <span className={`source-dot ${air?.source === "open-meteo" ? "is-live" : ""}`} aria-hidden="true" />
               {sourceNote}
             </span>
+            <button
+              type="button"
+              className="icon-button header-settings"
+              onClick={() => setSettingsOpen(true)}
+              aria-label={translate(settings.locale, "settings.title")}
+            >
+              <Icon name="settings" size={18} />
+            </button>
             <button type="button" className="button button--dark button--small" onClick={() => setSetupOpen(true)}>
               <Icon name="pin" size={15} />
-              {personalised ? "Edit profile" : "Make it mine"}
+              {personalised
+                ? translate(settings.locale, "header.editProfile")
+                : translate(settings.locale, "header.makeMine")}
             </button>
           </div>
         </div>
       </header>
+
+      {alertVisible && advice && (
+        <div className="threshold-banner" role="status" aria-live="polite">
+          <span>
+            <Icon name="shield" size={16} />
+            {translate(settings.locale, "alert.banner")} {advice.measurement.scaleLabel}{" "}
+            {advice.measurement.value}.
+          </span>
+          <div>
+            <a href="#playbook" className="text-link">
+              {translate(settings.locale, "alert.bannerCta")}
+            </a>
+            <button
+              type="button"
+              className="banner-close"
+              onClick={() => setAlertVisible(false)}
+              aria-label={translate(settings.locale, "common.close")}
+            >
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <CityPulse
         onUseCity={(city) =>
@@ -152,37 +306,33 @@ export function SaansApp() {
           <div className="hero-copy">
             <div className="hero-eyebrow">
               <span className="hero-eyebrow-line" aria-hidden="true" />
-              Family air copilot · winter smog edition
+              {translate(settings.locale, "hero.eyebrow")}
             </div>
             <h1 id="hero-title">
-              A <em>clearer</em> day,
+              {translate(settings.locale, "hero.titleA")}
               <br />
-              one choice at a time.
+              {translate(settings.locale, "hero.titleB")}
             </h1>
-            <p className="hero-lede">
-              Saans turns today&apos;s air into a practical plan for your household — the school
-              run, the kitchen, the commute, the bedroom. Every move shows the difference it can
-              make.
-            </p>
+            <p className="hero-lede">{translate(settings.locale, "hero.lede")}</p>
             <div className="hero-actions">
               <a className="button button--dark" href="#playbook">
-                See today&apos;s plan
+                {translate(settings.locale, "hero.seePlan")}
                 <Icon name="arrow" size={18} />
               </a>
               <button type="button" className="button button--quiet" onClick={() => setSetupOpen(true)}>
                 <Icon name="users" size={17} />
-                Personalise in 60 seconds
+                {translate(settings.locale, "hero.personalise")}
               </button>
             </div>
             <div className="hero-trust">
               <span>
-                <Icon name="shield" size={15} /> No account
+                <Icon name="shield" size={15} /> {translate(settings.locale, "hero.noAccount")}
               </span>
               <span>
-                <Icon name="wind" size={15} /> Location-aware
+                <Icon name="wind" size={15} /> {translate(settings.locale, "hero.location")}
               </span>
               <span>
-                <Icon name="leaf" size={15} /> Impact shown
+                <Icon name="leaf" size={15} /> {translate(settings.locale, "hero.impact")}
               </span>
             </div>
           </div>
@@ -191,7 +341,7 @@ export function SaansApp() {
             <div className="air-card">
               <div className="air-card-head">
                 <div>
-                  <span className="eyebrow">The air right now</span>
+                  <span className="eyebrow">{translate(settings.locale, "hero.airNow")}</span>
                   <h2>
                     {profile.city.name}
                     {profile.city.region ? `, ${profile.city.region}` : ""}
@@ -209,16 +359,18 @@ export function SaansApp() {
                 </div>
                 <button type="button" className="air-location-button" onClick={() => setSetupOpen(true)}>
                   <Icon name="pin" size={15} />
-                  Change
+                  {translate(settings.locale, "hero.change")}
                 </button>
               </div>
               <AqiOrb air={air} loading={airLoading} />
-              {air && (
-                <p className="air-category-advice">{air.categoryLabel}. {advice?.alert ?? "Keep the low-effort habits that protect indoor air."}</p>
+              {air && advice && (
+                <p className="air-category-advice">
+                  {advice.measurement.label}. {advice.alert ?? advice.atmosphere.ventilationAdvice}
+                </p>
               )}
               <div className="air-card-footer">
-                <span>Best outdoor window</span>
-                <strong>{advice ? advice.windows.best.label : "Calculating…"}</strong>
+                <span>{translate(settings.locale, "hero.bestWindow")}</span>
+                <strong>{advice ? advice.windows.best.label : translate(settings.locale, "common.loading")}</strong>
               </div>
             </div>
 
@@ -227,11 +379,11 @@ export function SaansApp() {
                 <Icon name="spark" size={18} />
               </span>
               <div>
-                <span className="eyebrow">Your one thing</span>
-                <p>{advice ? advice.topAction.title : "Finding the highest-impact move…"}</p>
+                <span className="eyebrow">{translate(settings.locale, "hero.oneThing")}</span>
+                <p>{advice ? advice.topAction.title : translate(settings.locale, "common.loading")}</p>
                 {advice && (
                   <a href="#playbook">
-                    Open the playbook <Icon name="arrow-right" size={14} />
+                    {translate(settings.locale, "hero.openPlaybook")} <Icon name="arrow-right" size={14} />
                   </a>
                 )}
               </div>
@@ -241,8 +393,12 @@ export function SaansApp() {
 
         <section className="impact-ribbon" aria-label="Today's headline estimates">
           <div className="ribbon-intro">
-            <span className="eyebrow">Today at a glance</span>
-            <p>{personalised ? "Tuned to your household." : "Demo household · Delhi."}</p>
+            <span className="eyebrow">{translate(settings.locale, "ribbon.title")}</span>
+            <p>
+              {personalised
+                ? translate(settings.locale, "ribbon.tuned")
+                : translate(settings.locale, "ribbon.demo")}
+            </p>
           </div>
           <div className="ribbon-stat">
             <span className="ribbon-icon ribbon-icon--lime">
@@ -250,7 +406,7 @@ export function SaansApp() {
             </span>
             <div>
               <strong>{advice ? `≤${advice.ledger.exposurePct}%` : "—"}</strong>
-              <span>modelled exposure cut</span>
+              <span>{translate(settings.locale, "ribbon.exposure")}</span>
             </div>
           </div>
           <div className="ribbon-stat">
@@ -259,7 +415,7 @@ export function SaansApp() {
             </span>
             <div>
               <strong>{advice ? `${formatDecimal(advice.ledger.co2eKgMonth)} kg` : "—"}</strong>
-              <span>CO₂e avoided / month</span>
+              <span>{translate(settings.locale, "ribbon.carbon")}</span>
             </div>
           </div>
           <div className="ribbon-stat">
@@ -268,7 +424,7 @@ export function SaansApp() {
             </span>
             <div>
               <strong>{advice ? advice.windows.best.label : "—"}</strong>
-              <span>cleanest outdoor window</span>
+              <span>{translate(settings.locale, "ribbon.window")}</span>
             </div>
           </div>
           <div className="ribbon-stat">
@@ -279,11 +435,11 @@ export function SaansApp() {
               <strong>
                 {advice
                   ? advice.ledger.costInrMonth >= 0
-                    ? `${formatInr(advice.ledger.costInrMonth)} saved`
-                    : `${formatInr(advice.ledger.costInrMonth)} cost`
+                    ? `${formatInr(advice.ledger.costInrMonth)} ${translate(settings.locale, "ribbon.saved")}`
+                    : `${formatInr(advice.ledger.costInrMonth)} ${translate(settings.locale, "ribbon.costLabel")}`
                   : "—"}
               </strong>
-              <span>estimated net / month</span>
+              <span>{translate(settings.locale, "ribbon.cost")}</span>
             </div>
           </div>
           <button type="button" className="ribbon-edit" onClick={() => setSetupOpen(true)} aria-label="Edit household profile">
@@ -296,19 +452,27 @@ export function SaansApp() {
             <div>
               <span className="demo-dot" aria-hidden="true" />
               <p>
-                <strong>You&apos;re seeing a demo household.</strong> Two adults, one child, one
-                older adult in Delhi. Add your own details to make the plan truly yours.
+                <strong>{translate(settings.locale, "demo.title")}</strong>{" "}
+                {translate(settings.locale, "demo.body")}
               </p>
             </div>
             <button type="button" className="text-link" onClick={() => setSetupOpen(true)}>
-              Personalise now <Icon name="arrow-right" size={15} />
+              {translate(settings.locale, "demo.cta")} <Icon name="arrow-right" size={15} />
             </button>
           </div>
         )}
 
         {air && advice ? (
           <>
-            <Playbook profile={profile} air={air} advice={advice} />
+            <Playbook
+              profile={profile}
+              air={air}
+              advice={advice}
+              completed={todayCompletion.completed}
+              onToggle={toggleAction}
+              streak={streak}
+              week={week}
+            />
             <ChoiceLab profile={profile} air={air} advice={advice} />
             <SwapsSection advice={advice} />
             <CommunitySection profile={profile} air={air} advice={advice} />
@@ -381,6 +545,12 @@ export function SaansApp() {
       )}
 
       <SetupDialog open={setupOpen} profile={profile} onClose={() => setSetupOpen(false)} onSave={saveProfile} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        advice={advice}
+        city={profile.city.name}
+      />
     </div>
   );
 }

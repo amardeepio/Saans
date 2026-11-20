@@ -3,6 +3,7 @@ import type { SVGProps } from "react";
 export type IconName =
   | "arrow"
   | "arrow-right"
+  | "calendar"
   | "check"
   | "chevron"
   | "close"
@@ -14,10 +15,13 @@ export type IconName =
   | "info"
   | "leaf"
   | "locate"
+  | "mic"
   | "mobility"
   | "pin"
   | "search"
+  | "settings"
   | "shield"
+  | "speaker"
   | "spark"
   | "sun"
   | "users"
@@ -26,6 +30,7 @@ export type IconName =
 const PATHS: Record<IconName, React.ReactNode> = {
   arrow: <path d="M12 19V5m0 0-6 6m6-6 6 6" />,
   "arrow-right": <path d="M5 12h14m0 0-6-6m6 6-6 6" />,
+  calendar: <><rect x="3.5" y="5" width="17" height="15" rx="2.5" /><path d="M8 3v4M16 3v4M3.5 10h17" /></>,
   check: <path d="m5 12 4 4L19 6" />,
   chevron: <path d="m9 18 6-6-6-6" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
@@ -37,10 +42,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>,
   leaf: <><path d="M20 4C12 4 5 7.5 5 14a6 6 0 0 0 6 6c6.5 0 9-7 9-16Z" /><path d="M4 21c2.5-5 6-8.5 11-11" /></>,
   locate: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /><circle cx="12" cy="12" r="7" /></>,
+  mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8" /></>,
   mobility: <><circle cx="5.5" cy="17" r="3" /><circle cx="18.5" cy="17" r="3" /><path d="M8.5 17h7l-2-7h-4L5.5 17M14 10l2-4h2" /></>,
   pin: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></>,
   search: <><circle cx="11" cy="11" r="7" /><path d="m16.5 16.5 4 4" /></>,
+  settings: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4.1l-.4 2.7a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.7h4.1l.4-2.7a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" /></>,
   shield: <><path d="M12 21s8-3.5 8-10V5l-8-3-8 3v6c0 6.5 8 10 8 10Z" /><path d="m9 12 2 2 4-5" /></>,
+  speaker: <><path d="M4 9v6h4l5 4V5L8 9H4Z" /><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" /></>,
   spark: <><path d="m12 3 1.6 4.8L18 9.5l-4.4 1.7L12 16l-1.6-4.8L6 9.5l4.4-1.7L12 3Z" /><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z" /></>,
   sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
   users: <><circle cx="9" cy="8" r="3.2" /><path d="M3 20c0-3.2 2.7-5.5 6-5.5s6 2.3 6 5.5" /><path d="M16 5.5a3 3 0 0 1 0 5.8M18 14.9c2 .7 3 2.4 3 4.6" /></>,

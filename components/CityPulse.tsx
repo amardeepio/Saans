@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { aqiCategory } from "@/lib/aqi";
 import { CITIES } from "@/lib/cities";
+import { translate } from "@/lib/i18n";
+import { measurementFor } from "@/lib/measurement";
 import { sampleReading } from "@/lib/sample-air";
 import { formatNumber } from "@/lib/format";
 import type { City, CityDetail } from "@/lib/types";
 import { CityDetailDialog } from "./CityDetailDialog";
 import { Icon } from "./Icon";
+import { usePreferences } from "./PreferencesProvider";
 import { WeatherGlyph } from "./WeatherGlyph";
 
 const METRO_IDS = ["mumbai", "delhi", "chennai", "kolkata", "bengaluru"];
@@ -24,6 +26,7 @@ function samplePulse(): CityDetail[] {
 }
 
 export function CityPulse({ onUseCity }: { onUseCity: (city: City) => void }) {
+  const { settings } = usePreferences();
   const [cities, setCities] = useState<CityDetail[] | null>(null);
   const [selected, setSelected] = useState<CityDetail | null>(null);
   const fallback = useMemo(() => samplePulse(), []);
@@ -63,11 +66,13 @@ export function CityPulse({ onUseCity }: { onUseCity: (city: City) => void }) {
         <div className="city-pulse-inner">
           <div className="city-pulse-intro">
             <span className="eyebrow" id="city-pulse-title">
-              Metro pulse
+              {translate(settings.locale, "cityPulse.title")}
             </span>
-            <span className="city-pulse-units">AQI · °C</span>
+            <span className="city-pulse-units">
+              {settings.aqiStandard === "naqi" ? "NAQI" : "AQI"} · °C
+            </span>
             <Link href="/dashboard" className="city-pulse-all">
-              Dashboard <Icon name="arrow-right" size={12} />
+              {translate(settings.locale, "nav.dashboard")} <Icon name="arrow-right" size={12} />
             </Link>
           </div>
           <ul
@@ -86,8 +91,8 @@ export function CityPulse({ onUseCity }: { onUseCity: (city: City) => void }) {
                   </li>
                 ))
               : items.map((item) => {
-                  const tone = aqiCategory(item.aqi).tone;
-                  const category = aqiCategory(item.aqi);
+                  const measurement = measurementFor(settings.aqiStandard, item);
+                  const tone = measurement.tone;
                   return (
                     <li key={item.city.id}>
                       <button
@@ -103,8 +108,8 @@ export function CityPulse({ onUseCity }: { onUseCity: (city: City) => void }) {
                           </span>
                         </div>
                         <div className={`city-pulse-reading tone-${tone}`}>
-                          <span className="city-pulse-aqi">{formatNumber(item.aqi)}</span>
-                          <span className="city-pulse-category">{category.shortLabel}</span>
+                          <span className="city-pulse-aqi">{formatNumber(measurement.value)}</span>
+                          <span className="city-pulse-category">{measurement.shortLabel}</span>
                         </div>
                         <span className="city-pulse-chevron" aria-hidden="true">
                           <Icon name="chevron" size={14} />

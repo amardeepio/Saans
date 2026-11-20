@@ -1,5 +1,4 @@
 import {
-  aqiCategory,
   exposureWeight,
   maskGuidance,
   riskFor,
@@ -7,11 +6,14 @@ import {
   RISK_LABELS,
   sensitiveGroups,
 } from "./aqi";
+import { describeAtmosphere } from "./dispersion";
+import { displayAqiFor, measurementFor } from "./measurement";
 import { hourLabelFromIso } from "./sample-air";
 import type {
   ActionCategory,
   Advice,
   AirReading,
+  AqiStandard,
   Effort,
   OutdoorWindow,
   PlanAction,
@@ -102,23 +104,33 @@ function verdictDetail(verdict: OutdoorWindow["verdict"], sensitive: boolean): s
   return "No clean outdoor window today. Keep essential trips short and protected.";
 }
 
-function buildWindows(air: AirReading, sensitive: boolean): Advice["windows"] {
+function buildWindows(
+  air: AirReading,
+  sensitive: boolean,
+  standard: AqiStandard,
+): Advice["windows"] {
   const points = air.hourly.length >= 2 ? air.hourly : [{ ...air, time: air.observedAt }];
   let bestIndex = 0;
   let worstIndex = 0;
   let bestAverage = Number.POSITIVE_INFINITY;
   let worstAverage = Number.NEGATIVE_INFINITY;
+  let bestDisplayAverage = Number.POSITIVE_INFINITY;
+  let worstDisplayAverage = Number.NEGATIVE_INFINITY;
 
   for (let index = 0; index < Math.max(1, points.length - 1); index += 1) {
     const first = points[index];
     const second = points[index + 1] ?? points[index];
     const average = (first.aqi + second.aqi) / 2;
+    const displayAverage =
+      (displayAqiFor(standard, first) + displayAqiFor(standard, second)) / 2;
     if (average < bestAverage) {
       bestAverage = average;
+      bestDisplayAverage = displayAverage;
       bestIndex = index;
     }
     if (average > worstAverage) {
       worstAverage = average;
+      worstDisplayAverage = displayAverage;
       worstIndex = index;
     }
   }
@@ -135,6 +147,7 @@ function buildWindows(air: AirReading, sensitive: boolean): Advice["windows"] {
       end: points[bestIndex + 2]?.time ?? bestStart.time,
       label: blockLabel(bestStart.time, 2),
       aqi: bestAqi,
+      displayAqi: Math.round(bestDisplayAverage),
       verdict: bestVerdict,
       detail: verdictDetail(bestVerdict, sensitive),
     },
@@ -143,6 +156,7 @@ function buildWindows(air: AirReading, sensitive: boolean): Advice["windows"] {
       end: points[worstIndex + 2]?.time ?? worstStart.time,
       label: blockLabel(worstStart.time, 2),
       aqi: worstAqi,
+      displayAqi: Math.round(worstDisplayAverage),
       verdict: windowVerdict(worstAqi),
       detail:
         worstAqi <= 100
@@ -276,16 +290,22 @@ function pickSwaps(profile: Profile, best: OutdoorWindow): Swap[] {
   return swaps.sort((a, b) => priorityWeight(b) - priorityWeight(a)).slice(0, 4);
 }
 
-export function buildAdvice(profile: Profile, air: AirReading): Advice {
+export function buildAdvice(
+  profile: Profile,
+  air: AirReading,
+  standard: AqiStandard = "us",
+): Advice {
+  const measurement = measurementFor(standard, air);
   const risk = riskFor(air.aqi, profile.household);
   const sensitive = sensitiveGroups(profile.household);
   const hasSensitive = sensitive.length > 0;
-  const windows = buildWindows(air, hasSensitive);
+  const windows = buildWindows(air, hasSensitive, standard);
+  const atmosphere = describeAtmosphere(air.weather, air.hourly);
   const weight = exposureWeight(profile);
   const aqi = air.aqi;
+  const displayAqi = measurement.value;
   const high = aqi > 150;
   const severe = aqi > 200;
-  const category = aqiCategory(aqi);
   const commute = commuteFootprint(profile);
   const actions: PlanAction[] = [];
   const mask = maskGuidance(aqi);
@@ -311,7 +331,7 @@ export function buildAdvice(profile: Profile, air: AirReading): Advice {
           "Wait away from the school gate's idling line, never in it.",
           "Ask the school to move outdoor assembly indoors when AQI is above 150.",
         ],
-        why: `Children breathe faster and take in more air per kilogram than adults. Their 15-minute trip can be a meaningful share of the day's PM2.5 dose. At AQI ${aqi}, ${mask.toLowerCase()}`,
+        why: `Children breathe faster and take in more air per kilogram than adults. Their 15-minute trip can be a meaningful share of the day's PM2.5 dose. At ${measurement.scaleLabel} ${displayAqi}, ${mask.toLowerCase()}`,
         effort: "easy",
         exposurePct: high ? 10 : 6,
         costInrMonth: 0,
@@ -404,30 +424,39 @@ export function buildAdvice(profile: Profile, air: AirReading): Advice {
     );
   }
 
-  if (profile.home.ventilation === "sealed" && !severe) {
+  if (
+    !severe &&
+    (profile.home.ventilation === "sealed" || atmosphere.dispersionLabel === "Good")
+  ) {
+    const airingWindow = atmosphere.bestVentilationWindow?.label ?? bestWindow;
     actions.push(
       makeAction({
         id: "airing",
-        title: "Use the cleanest hour to air the house",
+        title:
+          atmosphere.dispersionLabel === "Good"
+            ? "Use the breeze to air the house"
+            : "Use the cleanest hour to air the house",
         slot: "midday",
-        timeLabel: bestWindow,
+        timeLabel: airingWindow,
         category: "home",
         priority: "today",
         summary:
           "A short cross-breeze at the right time clears stale indoor air without inviting in the worst of the day.",
         steps: [
-          `Open opposite windows for 10–15 minutes around ${bestWindow}.`,
+          `Open opposite windows for 10–15 minutes around ${airingWindow}.`,
           "Move the purifier to another room or switch it off while windows are open.",
           "Close up again before the evening traffic peak.",
         ],
         why:
-          "Homes trap CO₂, cooking moisture and volatile chemicals as well as particles. Timed ventilation improves the things a filter cannot remove, without paying for it with a window full of traffic smoke.",
+          "Homes trap CO₂, cooking moisture and volatile chemicals as well as particles. Timed ventilation improves the things a filter cannot remove, without paying for it with a window full of traffic smoke. Today's dispersion is modelled as " +
+          atmosphere.dispersionLabel.toLowerCase() +
+          ".",
         effort: "easy",
-        exposurePct: 4,
+        exposurePct: atmosphere.dispersionLabel === "Good" ? 5 : 4,
         co2eKgMonth: 0,
         costInrMonth: 0,
-        tags: ["ventilation", "CO2", "timing"],
-        score: 30,
+        tags: ["ventilation", "CO2", "timing", "weather"],
+        score: atmosphere.dispersionLabel === "Good" ? 34 : 30,
       }),
     );
   } else if (high) {
@@ -455,6 +484,35 @@ export function buildAdvice(profile: Profile, air: AirReading): Advice {
         costInrMonth: 0,
         tags: ["windows", "morning peak", "indoor air"],
         score: 48,
+      }),
+    );
+  }
+
+  if (atmosphere.inversionRisk === "high" && !severe) {
+    actions.push(
+      makeAction({
+        id: "wait-for-wind",
+        title: "Wait for the wind before opening up",
+        slot: "morning",
+        timeLabel: "Before the evening peak",
+        category: "home",
+        priority: "today",
+        summary:
+          "The air is still and humid, so smoke and particles are lingering near the ground. Keep the sealed-room routine going until mixing improves.",
+        steps: [
+          "Keep street-facing windows and doors closed through the morning.",
+          "Run the purifier on low in the room you use most, with the door closed.",
+          "If you must air the room, use the shortest possible cross-breeze and close up again.",
+          `Recheck the dispersion outlook before the next airing${atmosphere.bestVentilationWindow ? `; the best modelled window is ${atmosphere.bestVentilationWindow.label}` : ""}.`,
+        ],
+        why:
+          "Cold, humid, still air can trap pollution in a shallow layer near the ground. Under those conditions a window can bring in more particles than it clears, even when the sky looks brighter.",
+        effort: "easy",
+        exposurePct: 5,
+        co2eKgMonth: 0,
+        costInrMonth: 0,
+        tags: ["inversion", "windows", "ventilation"],
+        score: 40,
       }),
     );
   }
@@ -593,7 +651,7 @@ export function buildAdvice(profile: Profile, air: AirReading): Advice {
           "Keep distance from buses and trucks — their exhaust plume is strongest directly behind.",
           "Try one transit day this week; it avoids about " + transitSaved + " kg CO₂e a month.",
         ],
-        why: `At AQI ${aqi}, a rider's exposure can be several times a walker's on the same road because of position in traffic. A well-fitted mask and a lower-traffic route are the two changes that matter most.`,
+        why: `At ${measurement.scaleLabel} ${displayAqi}, a rider's exposure can be several times a walker's on the same road because of position in traffic. A well-fitted mask and a lower-traffic route are the two changes that matter most.`,
         effort: "easy",
         exposurePct: 8,
         co2eKgMonth: 1.5,
@@ -668,7 +726,7 @@ export function buildAdvice(profile: Profile, air: AirReading): Advice {
       summary:
         windows.best.verdict === "avoid"
           ? "Today has no clean outdoor window. Give children movement without the exposure."
-          : `The cleanest stretch is ${movementAction} at about AQI ${windows.best.aqi}.`,
+          : `The cleanest stretch is ${movementAction} at about ${measurement.scaleLabel} ${windows.best.displayAqi}.`,
       steps:
         windows.best.verdict === "avoid"
           ? [
@@ -805,20 +863,31 @@ export function buildAdvice(profile: Profile, air: AirReading): Advice {
             : "A good day to bank cleaner habits";
 
   const alert =
-    aqi > 300
-      ? "Hazardous air: avoid outdoor exercise, burning anything indoors and unnecessary trips. Keep medicines and a charged phone nearby."
-      : aqi > 200
-        ? "Very poor air: children, older adults and anyone with a heart or lung condition should stay indoors where possible."
-        : aqi > 150
-          ? "Unhealthy air: cut prolonged outdoor exertion and keep windows facing the road closed during peaks."
-          : null;
+    measurement.standard === "naqi"
+      ? measurement.value > 400
+        ? "Severe air: avoid outdoor exercise, burning anything indoors and unnecessary trips. Keep medicines and a charged phone nearby."
+        : measurement.value > 300
+          ? "Very poor air: children, older adults and anyone with a heart or lung condition should stay indoors where possible."
+          : measurement.value > 200
+            ? "Poor air: cut prolonged outdoor exertion and keep windows facing the road closed during peaks."
+            : null
+      : measurement.value > 300
+        ? "Hazardous air: avoid outdoor exercise, burning anything indoors and unnecessary trips. Keep medicines and a charged phone nearby."
+        : measurement.value > 200
+          ? "Very poor air: children, older adults and anyone with a heart or lung condition should stay indoors where possible."
+          : measurement.value > 150
+            ? "Unhealthy air: cut prolonged outdoor exertion and keep windows facing the road closed during peaks."
+            : null;
 
   return {
     risk,
     riskLabel,
     headline,
-    summary: `${profile.city.name} is ${category.label.toLowerCase()} at AQI ${aqi}. ${riskSentence(risk, hasSensitive)}${sensitiveText} The plan below is weighted for ${profile.mobility.primary === "car" ? "a car commute" : `a ${profile.mobility.primary.replace("-", " ")} commute`} and a ${profile.budget} budget.`,
+    summary: `${profile.city.name} is ${measurement.label.toLowerCase()} at ${measurement.scaleLabel} ${displayAqi}. ${riskSentence(risk, hasSensitive)}${sensitiveText} The plan below is weighted for ${profile.mobility.primary === "car" ? "a car commute" : `a ${profile.mobility.primary.replace("-", " ")} commute`} and a ${profile.budget} budget.`,
     alert,
+    measurement,
+    grap: measurement.grap,
+    atmosphere,
     actions: selected,
     topAction,
     windows,
@@ -831,8 +900,10 @@ export function buildAdvice(profile: Profile, air: AirReading): Advice {
     swaps: pickSwaps(profile, windows.best),
     contextNotes: [
       `Air quality: ${air.source === "open-meteo" ? "live Open-Meteo reading" : "sample winter pattern — live data was unavailable"}.`,
+      `Displayed on the ${measurement.scaleLabel} scale${measurement.estimated ? " (estimated from current pollutant concentrations)" : ""}.`,
       "Exposure figures are modelled estimates for comparing actions, not medical measurements.",
-      `Mask guidance at AQI ${aqi}: ${mask}`,
+      `Mask guidance at ${measurement.scaleLabel} ${displayAqi}: ${mask}`,
+      `Dispersion: ${atmosphere.dispersionLabel.toLowerCase()} (${atmosphere.dispersionScore}/100), inversion risk ${atmosphere.inversionRisk}.`,
       `Vulnerability weighting: ${weight.toFixed(1)}× based on household composition.`,
     ],
   };

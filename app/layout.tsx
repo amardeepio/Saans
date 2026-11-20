@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { PreferencesProvider } from "@/components/PreferencesProvider";
+import { RouteProgress } from "@/components/RouteProgress";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,6 +23,16 @@ export const metadata: Metadata = {
       "A clearer day, one choice at a time. Practical, location-aware plans for smoky seasons.",
     type: "website",
   },
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Saans",
+    statusBarStyle: "default",
+  },
   robots: { index: true, follow: true },
 };
 
@@ -34,7 +46,12 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" data-scroll-behavior="smooth">
-      <body>{children}</body>
+      <body>
+        <PreferencesProvider>
+          <RouteProgress />
+          {children}
+        </PreferencesProvider>
+      </body>
     </html>
   );
 }

@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { formatDecimal, formatInr, formatNumber } from "@/lib/format";
+import { measurementFor } from "@/lib/measurement";
 import type { Advice, AirReading, Profile } from "@/lib/types";
 import { Icon } from "./Icon";
+import { usePreferences } from "./PreferencesProvider";
 
 interface SimOption {
   id: string;
@@ -108,6 +110,8 @@ export function ChoiceLab({
   air: AirReading;
   advice: Advice;
 }) {
+  const { settings } = usePreferences();
+  const measurement = measurementFor(settings.aqiStandard, air);
   const options = useMemo(() => buildOptions(profile, advice), [profile, advice]);
   const [selected, setSelected] = useState<string[]>([]);
 
@@ -183,7 +187,9 @@ export function ChoiceLab({
         <div className="lab-result" aria-live="polite">
           <div className="lab-result-top">
             <span className="eyebrow eyebrow--light">Modelled difference</span>
-            <span className="lab-city">{profile.city.name} · AQI {formatNumber(air.aqi)}</span>
+            <span className="lab-city">
+              {profile.city.name} · {measurement.scaleLabel} {formatNumber(measurement.value)}
+            </span>
           </div>
           {selected.length === 0 ? (
             <div className="lab-empty">

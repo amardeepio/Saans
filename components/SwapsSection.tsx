@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { formatNumber } from "@/lib/format";
+import { measurementFor } from "@/lib/measurement";
 import type { Advice, AirReading, Profile } from "@/lib/types";
 import { Icon } from "./Icon";
+import { usePreferences } from "./PreferencesProvider";
 
 export function SwapsSection({ advice }: { advice: Advice }) {
   return (
@@ -59,11 +61,13 @@ export function CommunitySection({
   air: AirReading;
   advice: Advice;
 }) {
+  const { settings } = usePreferences();
+  const measurement = measurementFor(settings.aqiStandard, air);
   const [status, setStatus] = useState("");
-  const message = `Hi neighbours — ${profile.city.name} is at AQI ${formatNumber(
-    air.aqi,
-  )} today. The cleanest window is ${advice.windows.best.label} (AQI ≈ ${
-    advice.windows.best.aqi
+  const message = `Hi neighbours — ${profile.city.name} is at ${measurement.scaleLabel} ${formatNumber(
+    measurement.value,
+  )} today. The cleanest window is ${advice.windows.best.label} (${measurement.scaleLabel} ≈ ${
+    advice.windows.best.displayAqi
   }). Could we keep the gate and school drop-off idling-free today, and avoid burning leaves or waste? I've made a short household plan with Saans — happy to share it.`;
 
   async function copyMessage() {

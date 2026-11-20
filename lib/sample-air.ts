@@ -71,10 +71,16 @@ export function sampleReading(city: City, now = new Date()): AirReading {
       18,
       Math.round(baseline * hourCurve(point.getHours()) + drift * 0.6 + noise),
     );
+    const weather = sampleWeather(city, point);
     return {
       time: point.toISOString(),
       aqi,
       pm25: aqiToPm25(aqi),
+      pm10: Math.round(aqiToPm25(aqi) * 1.9 * 10) / 10,
+      temperatureC: weather.temperatureC,
+      humidity: weather.humidity,
+      windKph: weather.windKph,
+      precipMm: 0,
     };
   });
 

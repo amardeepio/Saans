@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getCityDetails } from "@/lib/air";
+import { getAirReading, getCityDetails } from "@/lib/air";
 import { CITIES } from "@/lib/cities";
 
 const DELHI = CITIES.find((city) => city.id === "delhi")!;
@@ -92,5 +92,84 @@ describe("batch city details", () => {
     expect(details.every((detail) => detail.source === "sample")).toBe(true);
     expect(details.every((detail) => detail.weather.source === "sample")).toBe(true);
     expect(details.every((detail) => detail.aqi > 0)).toBe(true);
+  });
+});
+
+describe("single-city reading", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function hourlyTimes(): string[] {
+    return Array.from(
+      { length: 10 },
+      (_, index) => `2026-11-20T${String(8 + index).padStart(2, "0")}:00`,
+    );
+  }
+
+  it("merges 24-hour air quality with hourly weather", async () => {
+    const times = hourlyTimes();
+    const fetchMock = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url.includes("air-quality")) {
+        return jsonResponse({
+          current: {
+            time: "2026-11-20T09:00",
+            pm2_5: 120,
+            pm10: 210,
+            carbon_monoxide: 900,
+            sulphur_dioxide: 20,
+            nitrogen_dioxide: 50,
+            ozone: 70,
+            us_aqi: 190,
+          },
+          hourly: {
+            time: times,
+            pm2_5: times.map((_, index) => 90 + index),
+            pm10: times.map((_, index) => 180 + index),
+            us_aqi: times.map((_, index) => 160 + index),
+            boundary_layer_height: times.map(() => 180),
+          },
+        });
+      }
+      if (url.includes("hourly=")) {
+        return jsonResponse({
+          hourly: {
+            time: times,
+            temperature_2m: times.map(() => 14),
+            relative_humidity_2m: times.map(() => 86),
+            wind_speed_10m: times.map(() => 5),
+            precipitation: times.map(() => 0),
+          },
+        });
+      }
+      return jsonResponse({
+        current: {
+          temperature_2m: 14,
+          apparent_temperature: 13,
+          relative_humidity_2m: 86,
+          wind_speed_10m: 5,
+          weather_code: 45,
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const reading = await getAirReading(DELHI);
+    expect(reading.source).toBe("open-meteo");
+    expect(reading.aqi).toBe(190);
+    expect(reading.hourly.length).toBe(10);
+    expect(reading.hourly[0].windKph).toBe(5);
+    expect(reading.hourly[0].humidity).toBe(86);
+    expect(reading.hourly[0].boundaryLayerM).toBe(180);
+    expect(reading.weather.label).toBe("Fog");
+  });
+
+  it("falls back to a labelled sample when air quality is unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("offline"))));
+    const reading = await getAirReading(DELHI);
+    expect(reading.source).toBe("sample");
+    expect(reading.hourly.length).toBeGreaterThan(5);
+    expect(reading.weather.source).toBe("sample");
   });
 });

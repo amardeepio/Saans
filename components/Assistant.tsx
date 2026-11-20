@@ -4,8 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildLocalAnswer, localSuggestions } from "@/lib/assistant";
 import { sensitiveGroups } from "@/lib/aqi";
 import { formatNumber } from "@/lib/format";
+import { translate } from "@/lib/i18n";
+import { canListen, listenOnce } from "@/lib/speech";
 import type { Advice, AirReading, ChatMessage, ChatResponse, Profile } from "@/lib/types";
 import { Icon } from "./Icon";
+import { ListenButton } from "./ListenButton";
+import { usePreferences } from "./PreferencesProvider";
 
 function messageId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -17,7 +21,7 @@ function greeting(profile: Profile, air: AirReading, advice: Advice): ChatMessag
   return {
     id: "welcome",
     role: "assistant",
-    content: `I have ${profile.city.name}'s current reading and your household context.\n\nAQI is ${air.aqi} (${air.categoryLabel}). Today's priority is “${advice.topAction.title}”.\n\nAsk me anything practical — the school run, a purifier, cooking smoke, your commute or how to involve neighbours.${groups.length ? ` I'll keep extra care for ${groups.join(", ")} in view.` : ""}`,
+    content: `I have ${profile.city.name}'s current reading and your household context.\n\n${advice.measurement.scaleLabel} is ${advice.measurement.value} (${advice.measurement.label}). Today's priority is “${advice.topAction.title}”.\n\nAsk me anything practical — the school run, a purifier, cooking smoke, your commute or how to involve neighbours.${groups.length ? ` I'll keep extra care for ${groups.join(", ")} in view.` : ""}`,
     mode: "local",
     createdAt: new Date().toISOString(),
   };
@@ -32,10 +36,14 @@ interface AssistantProps {
 }
 
 export function Assistant({ profile, air, advice, open, onOpenChange }: AssistantProps) {
+  const { settings } = usePreferences();
+  const locale = settings.locale;
   const welcome = useMemo(() => greeting(profile, air, advice), [profile, air, advice]);
   const [messages, setMessages] = useState<ChatMessage[]>([welcome]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speechReady, setSpeechReady] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement>(null);
   const fabRef = useRef<HTMLButtonElement>(null);
@@ -47,6 +55,10 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
   useEffect(() => {
     setMessages([welcome]);
   }, [welcome]);
+
+  useEffect(() => {
+    setSpeechReady(canListen());
+  }, []);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -96,7 +108,14 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: question, history, profile, air }),
+        body: JSON.stringify({
+          message: question,
+          history,
+          profile,
+          air,
+          locale,
+          standard: settings.aqiStandard,
+        }),
         signal: AbortSignal.timeout(22_000),
       });
       if (!response.ok) {
@@ -149,6 +168,20 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
     }
   }
 
+  function startListening() {
+    if (listening) return;
+    setListening(true);
+    const started = listenOnce(
+      locale,
+      (text) => {
+        setInput((current) => (current ? `${current} ${text}` : text).slice(0, 600));
+        inputRef.current?.focus();
+      },
+      () => setListening(false),
+    );
+    if (!started) setListening(false);
+  }
+
   function close() {
     const dialog = dialogRef.current;
     if (dialog?.open) dialog.close();
@@ -171,8 +204,10 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
           <Icon name="chat" size={20} />
         </span>
         <span className="chat-fab-copy">
-          <strong>Ask Saans</strong>
-          <small>AQI {formatNumber(air.aqi)} · {profile.city.name}</small>
+          <strong>{translate(locale, "assistant.ask")}</strong>
+          <small>
+            {advice.measurement.scaleLabel} {formatNumber(advice.measurement.value)} · {profile.city.name}
+          </small>
         </span>
         <span className="chat-fab-live" aria-hidden="true" />
       </button>
@@ -205,10 +240,11 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
                 <Icon name="spark" size={18} />
               </span>
               <div>
-                <span className="eyebrow eyebrow--light">Ask Saans</span>
-                <h2 id="assistant-drawer-title">Your air assistant</h2>
+                <span className="eyebrow eyebrow--light">{translate(locale, "assistant.ask")}</span>
+                <h2 id="assistant-drawer-title">{translate(locale, "assistant.title")}</h2>
                 <p id="assistant-drawer-desc">
-                  {profile.city.name} · AQI {formatNumber(air.aqi)} · {air.categoryLabel}
+                  {profile.city.name} · {advice.measurement.scaleLabel}{" "}
+                  {formatNumber(advice.measurement.value)} · {advice.measurement.label}
                 </p>
               </div>
             </div>
@@ -223,9 +259,14 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
                 }}
                 disabled={messages.length <= 1}
               >
-                New chat
+                {translate(locale, "assistant.newChat")}
               </button>
-              <button type="button" className="drawer-close" onClick={close} aria-label="Close assistant">
+              <button
+                type="button"
+                className="drawer-close"
+                onClick={close}
+                aria-label={translate(locale, "assistant.close")}
+              >
                 <Icon name="close" size={19} />
               </button>
             </div>
@@ -273,10 +314,21 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
                 )}
                 <div className="message-body">
                   <p>{message.content}</p>
-                  {message.role === "assistant" && message.id !== "welcome" && (
-                    <span className="message-mode">
-                      {message.mode === "ai" ? "GenAI · grounded in your context" : "Household logic · offline-safe"}
-                    </span>
+                  {message.role === "assistant" && (
+                    <div className="message-tools">
+                      <ListenButton
+                        text={message.content}
+                        locale={locale}
+                        label={translate(locale, "curve.title")}
+                      />
+                      {message.id !== "welcome" && (
+                        <span className="message-mode">
+                          {message.mode === "ai"
+                            ? translate(locale, "assistant.ai")
+                            : translate(locale, "assistant.local")}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               </article>
@@ -286,7 +338,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
                 <span className="thinking-dot" />
                 <span className="thinking-dot" />
                 <span className="thinking-dot" />
-                <span>Reading your context…</span>
+                <span>{translate(locale, "assistant.thinking")}</span>
               </div>
             )}
           </div>
@@ -314,24 +366,38 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
               ref={inputRef}
               rows={1}
               maxLength={600}
-              placeholder="Ask about the school run, purifiers, cooking smoke…"
+              placeholder={translate(locale, "assistant.placeholder")}
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={onKeyDown}
               disabled={loading}
             />
+            {speechReady && (
+              <button
+                type="button"
+                className={`chat-mic ${listening ? "is-listening" : ""}`}
+                aria-label="Speak your question"
+                aria-pressed={listening}
+                onClick={startListening}
+                disabled={loading}
+              >
+                <Icon name="mic" size={18} />
+              </button>
+            )}
             <button
               type="submit"
               className="chat-send"
-              aria-label="Send question"
+              aria-label={translate(locale, "assistant.send")}
               disabled={loading || input.trim().length === 0}
             >
               <Icon name="arrow" size={19} />
             </button>
           </form>
           <div className="chat-footnote">
-            <span>Enter to send · Shift + Enter for a new line</span>
-            <span>{input.length > 0 ? `${input.length}/600` : "Not medical advice"}</span>
+            <span>{translate(locale, "assistant.enter")}</span>
+            <span>
+              {input.length > 0 ? `${input.length}/600` : translate(locale, "assistant.notMedical")}
+            </span>
           </div>
           {error && (
             <p className="chat-error" role="status">
@@ -340,7 +406,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
           )}
           <p className="drawer-privacy">
             <Icon name="shield" size={13} />
-            Your profile stays in this browser. No account, no chat history on our servers.
+            {translate(locale, "assistant.privacy")}
           </p>
         </div>
       </dialog>

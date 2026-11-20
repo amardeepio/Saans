@@ -61,12 +61,62 @@ export type AqiCategory =
   | "very-unhealthy"
   | "hazardous";
 
+export type NaqiCategory =
+  | "good"
+  | "satisfactory"
+  | "moderate"
+  | "poor"
+  | "very-poor"
+  | "severe";
+
+export type AqiStandard = "us" | "naqi";
+export type Locale = "en" | "hi";
+
 export type RiskLevel = "low" | "elevated" | "high" | "severe" | "critical";
+
+export interface GrapInfo {
+  stage: 1 | 2 | 3 | 4;
+  label: string;
+  range: string;
+  summary: string;
+  actions: string[];
+  official: false;
+}
+
+export interface AqiMeasurement {
+  standard: AqiStandard;
+  value: number;
+  scaleLabel: string;
+  /** Category key. US uses AqiCategory, India uses NaqiCategory. */
+  category: AqiCategory | NaqiCategory;
+  label: string;
+  shortLabel: string;
+  advice: string;
+  tone: "good" | "caution" | "warning" | "danger";
+  dominantPollutant?: keyof PollutantReadings;
+  grap: GrapInfo | null;
+  estimated: boolean;
+}
+
+export interface Atmosphere {
+  dispersionScore: number;
+  dispersionLabel: "Poor" | "Moderate" | "Good";
+  inversionRisk: "low" | "moderate" | "high";
+  note: string;
+  ventilationAdvice: string;
+  bestVentilationWindow: { start: string; end: string; label: string } | null;
+}
 
 export interface HourlyAir {
   time: string;
   aqi: number;
   pm25: number;
+  pm10?: number;
+  windKph?: number;
+  temperatureC?: number;
+  humidity?: number;
+  precipMm?: number;
+  boundaryLayerM?: number;
 }
 
 export interface WeatherSnapshot {
@@ -146,6 +196,8 @@ export interface OutdoorWindow {
   end: string;
   label: string;
   aqi: number;
+  /** AQI value converted to the active display scale. */
+  displayAqi: number;
   verdict: "good" | "short" | "avoid";
   detail: string;
 }
@@ -174,6 +226,9 @@ export interface Advice {
   headline: string;
   summary: string;
   alert: string | null;
+  measurement: AqiMeasurement;
+  grap: GrapInfo | null;
+  atmosphere: Atmosphere;
   actions: PlanAction[];
   topAction: PlanAction;
   windows: {

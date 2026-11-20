@@ -24,7 +24,9 @@ interface OpenMeteoAirResponse {
   hourly?: {
     time?: string[];
     pm2_5?: Array<number | null>;
+    pm10?: Array<number | null>;
     us_aqi?: Array<number | null>;
+    boundary_layer_height?: Array<number | null>;
   };
 }
 
@@ -35,6 +37,16 @@ interface OpenMeteoWeatherResponse {
     relative_humidity_2m?: number | null;
     wind_speed_10m?: number | null;
     weather_code?: number | null;
+  };
+}
+
+interface OpenMeteoHourlyWeatherResponse {
+  hourly?: {
+    time?: string[];
+    temperature_2m?: Array<number | null>;
+    relative_humidity_2m?: Array<number | null>;
+    wind_speed_10m?: Array<number | null>;
+    precipitation?: Array<number | null>;
   };
 }
 
@@ -98,6 +110,33 @@ async function fetchWeather(cities: City[]): Promise<WeatherSnapshot[]> {
     return cities.map((city, index) => weatherFromCurrent(city, data[index]?.current));
   } catch {
     return cities.map((city) => sampleWeather(city));
+  }
+}
+
+async function fetchHourlyWeather(
+  city: City,
+): Promise<OpenMeteoHourlyWeatherResponse["hourly"]> {
+  const url = new URL(OPEN_METEO_WEATHER);
+  url.searchParams.set("latitude", city.latitude.toFixed(4));
+  url.searchParams.set("longitude", city.longitude.toFixed(4));
+  url.searchParams.set(
+    "hourly",
+    "temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation",
+  );
+  url.searchParams.set("timezone", "auto");
+  url.searchParams.set("forecast_days", "2");
+
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      next: { revalidate: REVALIDATE_SECONDS },
+    });
+    if (!response.ok) return undefined;
+    const data = (await response.json()) as OpenMeteoHourlyWeatherResponse;
+    return data.hourly;
+  } catch {
+    return undefined;
   }
 }
 
@@ -182,6 +221,7 @@ export async function getCityDetails(cities: City[]): Promise<CityDetail[]> {
  */
 export async function getAirReading(city: City): Promise<AirReading> {
   const weatherPromise = fetchWeather([city]);
+  const hourlyWeatherPromise = fetchHourlyWeather(city);
   const url = new URL(OPEN_METEO_AIR);
   url.searchParams.set("latitude", city.latitude.toFixed(4));
   url.searchParams.set("longitude", city.longitude.toFixed(4));
@@ -189,7 +229,7 @@ export async function getAirReading(city: City): Promise<AirReading> {
     "current",
     "pm2_5,pm10,carbon_monoxide,sulphur_dioxide,nitrogen_dioxide,ozone,us_aqi",
   );
-  url.searchParams.set("hourly", "pm2_5,us_aqi");
+  url.searchParams.set("hourly", "pm2_5,pm10,us_aqi,boundary_layer_height");
   url.searchParams.set("forecast_days", "2");
   url.searchParams.set("timezone", "auto");
 
@@ -213,16 +253,33 @@ export async function getAirReading(city: City): Promise<AirReading> {
 
     const times = data.hourly?.time ?? [];
     const pm25Values = numbers(data.hourly?.pm2_5);
+    const pm10Values = numbers(data.hourly?.pm10);
     const aqiValues = numbers(data.hourly?.us_aqi);
+    const boundaryValues = numbers(data.hourly?.boundary_layer_height);
+    const hourlyWeather = await hourlyWeatherPromise;
+    const weatherTimes = hourlyWeather?.time ?? [];
+    const weatherIndex = new Map(weatherTimes.map((time, index) => [time.slice(0, 13), index]));
+
     const hourly: HourlyAir[] = times
       .map((time, index) => {
         const pointPm25 = Math.max(0, pm25Values[index] ?? 0);
         const pointAqi = aqiValues[index] > 0 ? aqiValues[index] : pm25ToAqi(pointPm25);
-        return {
+        const wIndex = weatherIndex.get(time.slice(0, 13));
+        const point: HourlyAir = {
           time,
           aqi: Math.round(pointAqi),
           pm25: rounded(pointPm25),
+          pm10: pm10Values[index] > 0 ? rounded(pm10Values[index]) : undefined,
+          boundaryLayerM:
+            boundaryValues[index] > 0 ? Math.round(boundaryValues[index]) : undefined,
         };
+        if (wIndex !== undefined) {
+          point.temperatureC = rounded(asNumber(hourlyWeather?.temperature_2m?.[wIndex]));
+          point.humidity = Math.round(asNumber(hourlyWeather?.relative_humidity_2m?.[wIndex], 50));
+          point.windKph = rounded(asNumber(hourlyWeather?.wind_speed_10m?.[wIndex]));
+          point.precipMm = rounded(asNumber(hourlyWeather?.precipitation?.[wIndex]));
+        }
+        return point;
       })
       .filter((point) => Number.isFinite(point.aqi));
 

@@ -3,6 +3,7 @@ import { buildLocalAnswer, localSuggestions } from "@/lib/assistant";
 import { buildAdvice } from "@/lib/engine";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { sampleReading } from "@/lib/sample-air";
+import { translateTexts } from "@/lib/translate";
 import {
   sanitiseAirReading,
   sanitiseChatText,
@@ -18,6 +19,8 @@ interface ChatBody {
   history?: unknown;
   profile?: unknown;
   air?: unknown;
+  locale?: unknown;
+  standard?: unknown;
 }
 
 function isSameOrigin(request: Request): boolean {
@@ -75,7 +78,9 @@ export async function POST(request: Request): Promise<Response> {
 
   const profile = sanitiseProfile(body.profile);
   const air = sanitiseAirReading(body.air, profile) ?? sampleReading(profile.city);
-  const advice = buildAdvice(profile, air);
+  const standard = body.standard === "us" ? "us" : "naqi";
+  const locale = body.locale === "hi" ? "hi" : "en";
+  const advice = buildAdvice(profile, air, standard);
   const local = buildLocalAnswer(message, profile, air, advice);
 
   const rawHistory = Array.isArray(body.history) ? body.history : [];
@@ -92,7 +97,11 @@ export async function POST(request: Request): Promise<Response> {
     .filter((item): item is { role: "user" | "assistant"; content: string } => item !== null);
 
   const generated = await askGenAi(message, history, profile, air, advice);
-  const answer = generated ?? local.answer;
+  let answer = generated ?? local.answer;
+  if (locale === "hi" && answer) {
+    const translated = await translateTexts([answer], "hi");
+    if (translated?.[0]) answer = translated[0];
+  }
 
   return Response.json(
     {

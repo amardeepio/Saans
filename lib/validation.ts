@@ -158,10 +158,20 @@ export function sanitiseAirReading(value: unknown, profile: Profile): AirReading
         .slice(0, 48)
         .map((point) => {
           const item = object(point);
+          const optional = (value: unknown, min: number, max: number) => {
+            const number = Number(value);
+            return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.round(number))) : undefined;
+          };
           return {
             time: text(item.time, new Date().toISOString(), 40),
             aqi: int(item.aqi, 0, 0, 500),
             pm25: int(item.pm25, 0, 0, 2000),
+            pm10: optional(item.pm10, 0, 3000),
+            windKph: optional(item.windKph, 0, 250),
+            temperatureC: optional(item.temperatureC, -60, 60),
+            humidity: optional(item.humidity, 0, 100),
+            precipMm: optional(item.precipMm, 0, 500),
+            boundaryLayerM: optional(item.boundaryLayerM, 0, 5000),
           };
         })
         .filter((point) => point.aqi > 0)

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { aqiCategory } from "@/lib/aqi";
 import { formatNumber, formatObservedAt } from "@/lib/format";
+import { measurementFor } from "@/lib/measurement";
 import type { City, CityDetail } from "@/lib/types";
 import { Icon } from "./Icon";
 import { PollutantGrid } from "./PollutantGrid";
+import { usePreferences } from "./PreferencesProvider";
 import { WeatherGlyph } from "./WeatherGlyph";
 
 interface CityDetailDialogProps {
@@ -15,10 +16,11 @@ interface CityDetailDialogProps {
 }
 
 export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialogProps) {
+  const { settings } = usePreferences();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
-  const category = aqiCategory(detail.aqi);
+  const measurement = measurementFor(settings.aqiStandard, detail);
   const sourceLabel =
     detail.source === "open-meteo" ? "Live · Open-Meteo" : "Sample · live data unavailable";
 
@@ -75,9 +77,9 @@ export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialo
                 {formatObservedAt(detail.observedAt)}
               </p>
             </div>
-            <div className={`city-detail-aqi tone-${category.tone}`}>
-              <strong>{formatNumber(detail.aqi)}</strong>
-              <span>US AQI</span>
+            <div className={`city-detail-aqi tone-${measurement.tone}`}>
+              <strong>{formatNumber(measurement.value)}</strong>
+              <span>{measurement.scaleLabel}</span>
             </div>
           </div>
 
@@ -97,7 +99,7 @@ export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialo
           </div>
 
           <p id="city-detail-description" className="city-detail-category">
-            <strong>{category.label}.</strong> {category.advice}
+            <strong>{measurement.label}.</strong> {measurement.advice}
           </p>
         </header>
 
@@ -110,7 +112,7 @@ export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialo
             <span className="city-detail-unit-note">WHO comparisons</span>
           </div>
 
-          <PollutantGrid readings={detail} />
+          <PollutantGrid readings={detail} standard={settings.aqiStandard} />
 
           <p className="city-detail-footnote">
             Pollutant values are ambient concentrations, not personal exposure. WHO comparisons
