@@ -1,9 +1,10 @@
-import { askGenAi } from "@/lib/ai";
-import { buildLocalAnswer, localSuggestions } from "@/lib/assistant";
+import { askGenAi, cleanAnswerText, containsUnsafeAdvice, isGenAiConfigured, streamGenAi } from "@/lib/ai";
+import { buildLocalAnswer } from "@/lib/assistant";
 import { buildAdvice } from "@/lib/engine";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { sampleReading } from "@/lib/sample-air";
 import { translateTexts } from "@/lib/translate";
+import type { ChatStreamEvent } from "@/lib/types";
 import {
   sanitiseAirReading,
   sanitiseChatText,
@@ -96,24 +97,86 @@ export async function POST(request: Request): Promise<Response> {
     })
     .filter((item): item is { role: "user" | "assistant"; content: string } => item !== null);
 
-  const generated = await askGenAi(message, history, profile, air, advice);
-  let answer = generated ?? local.answer;
-  if (locale === "hi" && answer) {
-    const translated = await translateTexts([answer], "hi");
-    if (translated?.[0]) answer = translated[0];
-  }
+  // Hindi needs the whole answer before it can be translated, so it takes the
+  // single-shot path even when the model is configured.
+  const wantsStream = isGenAiConfigured() && locale !== "hi";
+  const encoder = new TextEncoder();
+  let cancelled = false;
 
-  return Response.json(
-    {
-      answer,
-      mode: generated ? "ai" : "local",
-      suggestions: localSuggestions(profile),
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: ChatStreamEvent) => {
+        if (cancelled) return;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        } catch {
+          cancelled = true;
+        }
+      };
+
+      const fallback = (note?: string) => {
+        send({ type: "replace", text: local.answer });
+        send({ type: "done", mode: "local", suggestions: local.suggestions, note });
+      };
+
+      try {
+        if (wantsStream) {
+          let accumulated = "";
+          for await (const delta of streamGenAi(message, history, profile, air, advice)) {
+            accumulated += delta;
+            send({ type: "delta", text: delta });
+          }
+
+          const cleaned = cleanAnswerText(accumulated.replace(/\u0000/g, "")).slice(0, 1_600);
+          if (cleaned.length <= 20) {
+            fallback();
+          } else if (containsUnsafeAdvice(cleaned, air.aqi, profile)) {
+            fallback("Saans replaced that answer with its vetted household guidance.");
+          } else {
+            // Reconcile now that the whole answer is known: strips markdown
+            // that was split across chunks.
+            send({ type: "replace", text: cleaned });
+            send({ type: "done", mode: "ai", suggestions: local.suggestions });
+          }
+        } else {
+          const generated = await askGenAi(message, history, profile, air, advice);
+          let answer = generated ?? local.answer;
+          if (locale === "hi") {
+            const translated = await translateTexts([answer], "hi");
+            if (translated?.[0]) answer = translated[0];
+          }
+          send({ type: "replace", text: answer });
+          send({
+            type: "done",
+            mode: generated ? "ai" : "local",
+            suggestions: local.suggestions,
+          });
+        }
+      } catch {
+        fallback(
+          "The live assistant was unavailable, so this answer used Saans's offline household logic.",
+        );
+      } finally {
+        if (!cancelled) {
+          try {
+            controller.close();
+          } catch {
+            // Already closed by the client aborting.
+          }
+        }
+      }
     },
-    {
-      headers: {
-        "Cache-Control": "no-store",
-        "X-Content-Type-Options": "nosniff",
-      },
+    cancel() {
+      cancelled = true;
     },
-  );
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

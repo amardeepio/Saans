@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { askGenAi, isGenAiConfigured } from "@/lib/ai";
+import { askGenAi, cleanAnswerText, isGenAiConfigured, streamGenAi } from "@/lib/ai";
 import { DEFAULT_PROFILE } from "@/lib/cities";
 import { buildAdvice } from "@/lib/engine";
 import { sampleReading } from "@/lib/sample-air";
@@ -107,4 +107,41 @@ describe("optional GenAI layer", () => {
     expect(answer).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("strips markdown markers that arrive split across chunks", () => {
+    expect(cleanAnswerText("**Bold text**")).toBe("Bold text");
+    expect(cleanAnswerText("Bold text **")).toBe("Bold text");
+    expect(cleanAnswerText("- one\n- two")).toBe("• one\n• two");
+    expect(cleanAnswerText("Plain answer, no markup.")).toBe("Plain answer, no markup.");
+  });
+
+  it("streams deltas from a server-sent-events response", async () => {
+    const frames = [
+      'data: {"choices":[{"delta":{"content":"Keep "}}]}\n',
+      'data: {"choices":[{"delta":{"content":"windows "}}]}\n',
+      'data: {"choices":[{"delta":{"content":"closed."}}]}\n',
+      "data: [DONE]\n",
+    ];
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const frame of frames) controller.enqueue(encoder.encode(frame));
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, body }) as unknown as Response));
+
+    const parts: string[] = [];
+    for await (const delta of streamGenAi("q", [], DEFAULT_PROFILE, AIR, ADVICE)) {
+      parts.push(delta);
+    }
+
+    expect(parts.join("")).toBe("Keep windows closed.");
+    expect(fetchMockBody(vi.mocked(fetch).mock.calls[0])).toContain('"stream":true');
+  });
 });
+
+function fetchMockBody(call: unknown[]): string {
+  const init = call[1] as RequestInit | undefined;
+  return String(init?.body ?? "");
+}

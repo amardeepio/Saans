@@ -253,3 +253,13 @@ export interface ChatResponse {
   mode: "ai" | "local";
   suggestions: string[];
 }
+
+/** Newline-delimited events streamed from /api/chat. */
+export interface ChatStreamEvent {
+  type: "delta" | "replace" | "done";
+  text?: string;
+  mode?: "ai" | "local";
+  suggestions?: string[];
+  /** Shown under the answer when Saans rewrote or replaced model output. */
+  note?: string;
+}

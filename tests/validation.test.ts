@@ -63,14 +63,14 @@ describe("profile validation", () => {
 
   it("validates a city independently", () => {
     const city = sanitiseCity({
-      name: "  Lahore ",
-      country: "Pakistan",
-      latitude: "31.55",
-      longitude: "74.34",
+      name: "  Jaipur ",
+      country: "India",
+      latitude: "26.91",
+      longitude: "75.79",
     });
-    expect(city.name).toBe("Lahore");
-    expect(city.latitude).toBe(31.55);
-    expect(city.longitude).toBe(74.34);
+    expect(city.name).toBe("Jaipur");
+    expect(city.latitude).toBe(26.91);
+    expect(city.longitude).toBe(75.79);
   });
 
   it("clamps air readings and repairs short forecasts", () => {

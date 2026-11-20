@@ -3,20 +3,42 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { DEFAULT_PROFILE, CITIES } from "@/lib/cities";
+import { buildAdvice } from "@/lib/engine";
 import { formatNumber, formatObservedAt } from "@/lib/format";
 import { translate } from "@/lib/i18n";
 import { INDIA_TRACKED_CITIES } from "@/lib/india";
 import { measurementFor } from "@/lib/measurement";
 import { sampleReading } from "@/lib/sample-air";
-import type { AirReading, City, CityDetail } from "@/lib/types";
-import { sanitiseAirReading } from "@/lib/validation";
+import type { AirReading, City, CityDetail, Profile } from "@/lib/types";
+import { deserialiseProfile, PROFILE_STORAGE_KEY, sanitiseAirReading } from "@/lib/validation";
 import { AqiScaleToggle } from "./AqiScaleToggle";
+import { Assistant } from "./Assistant";
 import { GrapNotice } from "./GrapNotice";
 import { Icon } from "./Icon";
 import { Logo } from "./Logo";
 import { PollutantGrid } from "./PollutantGrid";
 import { usePreferences } from "./PreferencesProvider";
+import { ShareRow } from "./ShareRow";
 import { WeatherGlyph } from "./WeatherGlyph";
+
+function requestedCityId(): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("city");
+}
+
+function pickCity(items: CityDetail[], id: string | null): CityDetail | undefined {
+  if (!id) return undefined;
+  return items.find((item) => item.city.id === id);
+}
+
+/** Keeps the address bar shareable without turning the route dynamic. */
+function syncCityParam(id: string) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("city") === id) return;
+  url.searchParams.set("city", id);
+  window.history.replaceState(null, "", url);
+}
 
 function cityParams(city: City): string {
   const params = new URLSearchParams({
@@ -46,9 +68,16 @@ export function DashboardApp() {
   const [searching, setSearching] = useState(false);
   const [searchNote, setSearchNote] = useState("");
   const [loadingCity, setLoadingCity] = useState(false);
+  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
   const skipNextSearch = useRef(false);
   const fallback = useMemo(() => fallbackRanking(), []);
+
+  useEffect(() => {
+    const saved = deserialiseProfile(window.localStorage.getItem(PROFILE_STORAGE_KEY));
+    if (saved) setProfile(saved);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -65,12 +94,12 @@ export function DashboardApp() {
       })
       .then((items) => {
         setRanking(items);
-        setSelected((current) => current ?? items[0]);
+        setSelected((current) => current ?? pickCity(items, requestedCityId()) ?? items[0]);
       })
       .catch((error) => {
         if ((error as Error).name === "AbortError") return;
         setRanking(fallback);
-        setSelected((current) => current ?? fallback[0]);
+        setSelected((current) => current ?? pickCity(fallback, requestedCityId()) ?? fallback[0]);
       });
 
     return () => controller.abort();
@@ -148,6 +177,7 @@ export function DashboardApp() {
 
   function chooseRanking(item: CityDetail) {
     setSelected(item);
+    syncCityParam(item.city.id);
     revealDetail();
   }
 
@@ -167,10 +197,12 @@ export function DashboardApp() {
       const safe = sanitiseAirReading(await response.json(), { ...DEFAULT_PROFILE, city });
       if (!safe) throw new Error("air-format");
       setSelected(safe);
+      syncCityParam(city.id);
       setSearchNote(`Showing ${city.name}.`);
     } catch {
       const fallbackReading: AirReading = sampleReading(city);
       setSelected(fallbackReading);
+      syncCityParam(city.id);
       setSearchNote(`Showing ${city.name} using a clearly-labelled sample pattern.`);
     } finally {
       setLoadingCity(false);
@@ -183,6 +215,21 @@ export function DashboardApp() {
   const selectedMeasurement = selected
     ? measurementFor(settings.aqiStandard, selected)
     : null;
+
+  // The assistant answers about whichever city is selected, using the household
+  // profile saved on the daily-plan page.
+  const assistantProfile = useMemo(
+    () => (selected ? { ...profile, city: selected.city } : profile),
+    [profile, selected],
+  );
+  const assistantAir = useMemo<AirReading | null>(
+    () => (selected ? { ...selected, hourly: [] } : null),
+    [selected],
+  );
+  const assistantAdvice = useMemo(
+    () => (assistantAir ? buildAdvice(assistantProfile, assistantAir, settings.aqiStandard) : null),
+    [assistantProfile, assistantAir, settings.aqiStandard],
+  );
 
   return (
     <div className="dashboard-shell">
@@ -383,6 +430,15 @@ export function DashboardApp() {
                   </span>
                 </div>
 
+                <ShareRow
+                  className="dashboard-share"
+                  title={`${selected.city.name}${selected.city.region ? `, ${selected.city.region}` : ""}`}
+                  value={selectedMeasurement.value}
+                  scaleLabel={selectedMeasurement.scaleLabel}
+                  label={selectedMeasurement.label}
+                  path={`/dashboard?city=${selected.city.id}`}
+                />
+
                 <div className={`dashboard-selected-head tone-${selectedMeasurement.tone}`}>
                   <div className="dashboard-selected-aqi">
                     <strong>{formatNumber(selectedMeasurement.value)}</strong>
@@ -443,6 +499,16 @@ export function DashboardApp() {
         </p>
         <span>Air + weather: Open-Meteo</span>
       </footer>
+
+      {assistantAir && assistantAdvice && (
+        <Assistant
+          profile={assistantProfile}
+          air={assistantAir}
+          advice={assistantAdvice}
+          open={assistantOpen}
+          onOpenChange={setAssistantOpen}
+        />
+      )}
     </div>
   );
 }

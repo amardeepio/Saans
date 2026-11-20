@@ -6,8 +6,11 @@ import {
   type PollutantInfo,
 } from "@/lib/pollutants";
 import { pollutantSubIndex } from "@/lib/naqi";
+import { askSaans } from "@/lib/ask";
+import { translate } from "@/lib/i18n";
 import type { AqiStandard, PollutantReadings } from "@/lib/types";
 import { PollutantGlyph } from "./PollutantGlyph";
+import { usePreferences } from "./PreferencesProvider";
 
 function formattedValue(pollutant: PollutantInfo, readings: PollutantReadings): string {
   const value = pollutantDisplayValue(pollutant, readings);
@@ -25,6 +28,8 @@ export function PollutantGrid({
   readings: PollutantReadings;
   standard?: AqiStandard;
 }) {
+  const { settings } = usePreferences();
+  const askLabel = translate(settings.locale, "assistant.ask");
   return (
     <div className="pollutant-grid">
       {POLLUTANTS.map((pollutant) => {
@@ -59,6 +64,17 @@ export function PollutantGrid({
             {subIndex !== null && (
               <span className="pollutant-subindex">NAQI sub-index {subIndex}</span>
             )}
+            <button
+              type="button"
+              className="ask-saans pollutant-ask"
+              onClick={() =>
+                askSaans(
+                  `${pollutant.label} (${pollutant.formula}) is ${value} ${pollutant.unit} right now. What does that mean for my household today, and what should I do about it?`,
+                )
+              }
+            >
+              {askLabel}
+            </button>
           </article>
         );
       })}

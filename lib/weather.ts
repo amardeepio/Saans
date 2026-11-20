@@ -55,7 +55,7 @@ export function sampleWeather(city: City, now = new Date()): WeatherSnapshot {
   const apparent = Math.round((temperature + (hash(`${city.id}-feels`) % 7) / 2 - 1.5) * 10) / 10;
   const humidity = 42 + (hash(`${city.id}-humidity`) % 40);
   const wind = Math.round((4 + (hash(`${city.id}-wind`) % 13)) * 10) / 10;
-  const isCoastal = ["mumbai", "chennai", "kolkata", "karachi"].includes(city.id);
+  const isCoastal = ["mumbai", "chennai", "kolkata", "kochi", "visakhapatnam"].includes(city.id);
   const code = isCoastal ? 1 : city.id === "bengaluru" ? 2 : 45;
 
   return {

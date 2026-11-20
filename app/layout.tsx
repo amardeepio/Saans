@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { PreferencesProvider } from "@/components/PreferencesProvider";
 import { RouteProgress } from "@/components/RouteProgress";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Saans — a family air copilot for smog season",
   description:
     "A location-aware assistant that turns severe winter smog into a practical, low-emission daily plan for families and communities.",
@@ -22,6 +24,14 @@ export const metadata: Metadata = {
     description:
       "A clearer day, one choice at a time. Practical, location-aware plans for smoky seasons.",
     type: "website",
+    siteName: "Saans",
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Saans — a family air copilot",
+    description:
+      "A clearer day, one choice at a time. Practical, location-aware plans for smoky seasons.",
   },
   manifest: "/manifest.webmanifest",
   icons: {
@@ -39,8 +49,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: "#f4efe4",
   colorScheme: "light",
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

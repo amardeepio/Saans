@@ -1,4 +1,5 @@
 import { sensitiveGroups } from "@/lib/aqi";
+import { askSaans } from "@/lib/ask";
 import { formatDecimal, formatInr, formatObservedAt, formatNumber } from "@/lib/format";
 import type { HabitSummary } from "@/lib/habits";
 import { translate } from "@/lib/i18n";
@@ -107,6 +108,18 @@ function ActionItem({
               locale={locale}
               label={translate(locale, "playbook.doThis")}
             />
+            <button
+              type="button"
+              className="ask-saans"
+              onClick={() =>
+                askSaans(
+                  `Help me do this today: “${action.title}”. Why does it matter for my household, and what is the first step?`,
+                )
+              }
+            >
+              <Icon name="chat" size={13} />
+              {translate(locale, "assistant.ask")}
+            </button>
           </div>
           <div className="action-why">
             <span className="micro-label">{translate(locale, "playbook.whyWorks")}</span>

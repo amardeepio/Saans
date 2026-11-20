@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CITIES } from "@/lib/cities";
+import { isIndianCity } from "@/lib/india";
 import { sanitiseProfile } from "@/lib/validation";
 import type { City, Priority, Profile } from "@/lib/types";
 import { Icon } from "./Icon";
@@ -12,6 +13,9 @@ interface SetupDialogProps {
   onClose: () => void;
   onSave: (profile: Profile) => void;
 }
+
+/** Default chooser grid: Indian cities only, so no cross-border rows appear. */
+const SUGGESTED_CITIES = CITIES.filter(isIndianCity).slice(0, 6);
 
 function cloneProfile(profile: Profile): Profile {
   return JSON.parse(JSON.stringify(profile)) as Profile;
@@ -129,7 +133,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Profile>(() => cloneProfile(profile));
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<City[]>(CITIES.slice(0, 6));
+  const [results, setResults] = useState<City[]>(SUGGESTED_CITIES);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
   const [searchNote, setSearchNote] = useState("");
@@ -142,7 +146,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
       setDraft(cloneProfile(profile));
       setStep(1);
       setQuery("");
-      setResults(CITIES.slice(0, 6));
+      setResults(SUGGESTED_CITIES);
       setSearchNote("");
     } else if (!open && dialog.open) {
       dialog.close();
@@ -159,7 +163,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
     if (!open) return;
     const trimmed = query.trim();
     if (trimmed.length < 2) {
-      setResults(CITIES.slice(0, 6));
+      setResults(SUGGESTED_CITIES);
       setSearching(false);
       return;
     }
@@ -178,7 +182,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
           setSearchNote("City search is unavailable. Pick a nearby city below.");
-          setResults(CITIES.slice(0, 6));
+          setResults(SUGGESTED_CITIES);
         }
       } finally {
         setSearching(false);
@@ -200,7 +204,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
   function chooseCity(city: City) {
     setDraft((current) => ({ ...current, city }));
     setQuery("");
-    setResults(CITIES.slice(0, 6));
+    setResults(SUGGESTED_CITIES);
     setSearchNote("");
   }
 
@@ -329,7 +333,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
                       id="city-search"
                       type="search"
                       autoComplete="off"
-                      placeholder="Search Delhi, Lahore, Dhaka…"
+                      placeholder="Search Delhi, Mumbai, Patna…"
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
                       aria-describedby="city-search-note"

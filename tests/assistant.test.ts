@@ -59,4 +59,13 @@ describe("local assistant", () => {
     expect(suggestions.length).toBe(3);
     expect(suggestions[0]).toContain("transit");
   });
+
+  it("returns follow-ups that follow the answer's topic", () => {
+    const school = buildLocalAnswer("Is the school run safe today?", PROFILE, AIR, ADVICE);
+    const purifier = buildLocalAnswer("Which air purifier should I buy?", PROFILE, AIR, ADVICE);
+
+    expect(school.suggestions).not.toEqual(purifier.suggestions);
+    expect(purifier.suggestions.join(" ").toLowerCase()).toContain("purifier");
+    expect(school.suggestions.length).toBe(3);
+  });
 });

@@ -8,10 +8,32 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+const DISMISS_KEY = "saans:install-hint-dismissed";
+
+/** iOS Safari never fires `beforeinstallprompt`, so the hint is the only path. */
+function isIosSafari() {
+  const ua = navigator.userAgent;
+  const ios =
+    /iPad|iPhone|iPod/.test(ua) ||
+    // iPadOS reports itself as a Mac; touch points give it away.
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const webkit = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  return ios && webkit;
+}
+
+function isStandalone() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
 export function PwaManager() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [offline, setOffline] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
+  const [iosHint, setIosHint] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     setOffline(!navigator.onLine);
@@ -56,6 +78,15 @@ export function PwaManager() {
   }, []);
 
   useEffect(() => {
+    try {
+      if (window.localStorage.getItem(DISMISS_KEY) === "1") setDismissed(true);
+    } catch {
+      // Safari private mode can refuse storage; fall back to showing the hint.
+    }
+    if (!isStandalone() && isIosSafari()) setIosHint(true);
+  }, []);
+
+  useEffect(() => {
     const handler = (event: Event) => {
       event.preventDefault();
       setInstallEvent(event as BeforeInstallPromptEvent);
@@ -76,7 +107,20 @@ export function PwaManager() {
     setUpdateReady(false);
   }
 
-  if (!offline && !installEvent && !updateReady) return null;
+  function dismiss() {
+    setDismissed(true);
+    setIosHint(false);
+    setInstallEvent(null);
+    try {
+      window.localStorage.setItem(DISMISS_KEY, "1");
+    } catch {
+      // Nothing to persist; the strip stays hidden for this visit only.
+    }
+  }
+
+  const showInstall = !dismissed && (Boolean(installEvent) || iosHint);
+
+  if (!offline && !updateReady && !showInstall) return null;
 
   return (
     <div className="pwa-strip" role="status" aria-live="polite">
@@ -90,9 +134,24 @@ export function PwaManager() {
           A new version is ready. Refresh
         </button>
       )}
-      {installEvent && (
+      {showInstall && installEvent && (
         <button type="button" onClick={() => void install()}>
           <Icon name="arrow" size={14} /> Install Saans
+        </button>
+      )}
+      {showInstall && !installEvent && (
+        <span className="pwa-ios-hint">
+          <Icon name="arrow" size={14} /> Tap Share, then “Add to Home Screen”
+        </span>
+      )}
+      {showInstall && (
+        <button
+          type="button"
+          className="pwa-strip-dismiss"
+          onClick={dismiss}
+          aria-label="Dismiss install prompt"
+        >
+          <Icon name="close" size={12} />
         </button>
       )}
     </div>

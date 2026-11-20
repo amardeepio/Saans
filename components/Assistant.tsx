@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { cleanAnswerText } from "@/lib/ai";
+import { onAskSaans } from "@/lib/ask";
 import { buildLocalAnswer, localSuggestions } from "@/lib/assistant";
 import { sensitiveGroups } from "@/lib/aqi";
 import { formatNumber } from "@/lib/format";
 import { translate } from "@/lib/i18n";
 import { canListen, listenOnce } from "@/lib/speech";
-import type { Advice, AirReading, ChatMessage, ChatResponse, Profile } from "@/lib/types";
+import type { Advice, AirReading, ChatMessage, ChatStreamEvent, Profile } from "@/lib/types";
 import { Icon } from "./Icon";
 import { ListenButton } from "./ListenButton";
 import { usePreferences } from "./PreferencesProvider";
@@ -45,16 +47,22 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
   const [listening, setListening] = useState(false);
   const [speechReady, setSpeechReady] = useState(false);
   const [error, setError] = useState("");
+  const [note, setNote] = useState("");
+  const [chips, setChips] = useState<string[]>(() => localSuggestions(profile));
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const fabRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const suggestions = useMemo(() => localSuggestions(profile), [profile]);
   const groups = sensitiveGroups(profile.household);
 
   useEffect(() => {
     setMessages([welcome]);
   }, [welcome]);
+
+  useEffect(() => {
+    setChips(localSuggestions(profile));
+  }, [profile]);
 
   useEffect(() => {
     setSpeechReady(canListen());
@@ -67,7 +75,10 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
     if (open && !dialog.open) {
       dialog.showModal();
       document.body.classList.add("chat-open");
-      window.setTimeout(() => inputRef.current?.focus(), 120);
+      // Focusing on a touch device pops the keyboard immediately and shifts the
+      // drawer before the user has read anything.
+      const touch = window.matchMedia("(hover: none)").matches;
+      if (!touch) window.setTimeout(() => inputRef.current?.focus(), 120);
     } else if (!open && dialog.open) {
       dialog.close();
       document.body.classList.remove("chat-open");
@@ -77,6 +88,50 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
       document.body.classList.remove("chat-open");
     };
   }, [open]);
+
+  // Safari does not shrink `dvh` when the soft keyboard opens, so track the
+  // visual viewport and size the drawer from it.
+  useEffect(() => {
+    if (!open) return;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const root = document.documentElement.style;
+    const apply = () => {
+      root.setProperty("--chat-vh", `${Math.round(viewport.height)}px`);
+      root.setProperty("--chat-vtop", `${Math.round(viewport.offsetTop)}px`);
+    };
+    apply();
+    viewport.addEventListener("resize", apply);
+    viewport.addEventListener("scroll", apply);
+    return () => {
+      viewport.removeEventListener("resize", apply);
+      viewport.removeEventListener("scroll", apply);
+      root.removeProperty("--chat-vh");
+      root.removeProperty("--chat-vtop");
+    };
+  }, [open]);
+
+  // "Ask about this" hooks anywhere in the app open the drawer pre-filled.
+  useEffect(
+    () =>
+      onAskSaans((question) => {
+        setPendingQuestion(question);
+        onOpenChange(true);
+      }),
+    [onOpenChange],
+  );
+
+  useEffect(() => {
+    if (!open || !pendingQuestion) return;
+    const question = pendingQuestion;
+    // Clearing the pending question inside the timer (not before it) keeps the
+    // effect from tearing down its own timeout on the resulting re-render.
+    const timer = window.setTimeout(() => {
+      setPendingQuestion(null);
+      void ask(question);
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [open, pendingQuestion]);
 
   useEffect(() => {
     if (!open) return;
@@ -102,6 +157,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
     setMessages((current) => [...current, userMessage]);
     setInput("");
     setError("");
+    setNote("");
     setLoading(true);
 
     try {
@@ -122,17 +178,74 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
         const data = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(data?.error ?? "The assistant could not answer just now.");
       }
-      const data = (await response.json()) as ChatResponse;
-      setMessages((current) => [
-        ...current,
-        {
-          id: messageId(),
-          role: "assistant",
-          content: data.answer,
-          mode: data.mode,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("The assistant could not answer just now.");
+
+      const answerId = messageId();
+      let appended = false;
+      let buffer = "";
+      let mode: "ai" | "local" = "local";
+      let streamNote = "";
+
+      const paint = (text: string, nextMode: "ai" | "local") => {
+        mode = nextMode;
+        if (!appended) {
+          appended = true;
+          setMessages((current) => [
+            ...current,
+            {
+              id: answerId,
+              role: "assistant",
+              content: text,
+              mode: nextMode,
+              createdAt: new Date().toISOString(),
+            },
+          ]);
+          return;
+        }
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === answerId ? { ...item, content: text, mode: nextMode } : item,
+          ),
+        );
+      };
+
+      const handle = (event: ChatStreamEvent) => {
+        if (event.type === "delta" && event.text) {
+          buffer += event.text;
+          paint(cleanAnswerText(buffer), "ai");
+        } else if (event.type === "replace" && typeof event.text === "string") {
+          buffer = event.text;
+          paint(event.text, event.mode ?? mode);
+        } else if (event.type === "done") {
+          mode = event.mode ?? mode;
+          if (event.suggestions?.length) setChips(event.suggestions);
+          if (event.note) streamNote = event.note;
+          if (buffer) paint(buffer, mode);
+        }
+      };
+
+      const decoder = new TextDecoder();
+      let raw = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        raw += decoder.decode(value, { stream: true });
+        const lines = raw.split("\n");
+        raw = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            handle(JSON.parse(line) as ChatStreamEvent);
+          } catch {
+            // Ignore a malformed frame rather than dropping the whole answer.
+          }
+        }
+      }
+
+      if (!appended) throw new Error("The assistant could not answer just now.");
+      setNote(streamNote);
     } catch (caught) {
       const fallback = buildLocalAnswer(question, profile, air, advice);
       setMessages((current) => [
@@ -145,6 +258,8 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
           createdAt: new Date().toISOString(),
         },
       ]);
+      setChips(fallback.suggestions);
+      setNote("");
       setError(
         caught instanceof Error && caught.message.includes("short break")
           ? caught.message
@@ -152,7 +267,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
       );
     } finally {
       setLoading(false);
-      inputRef.current?.focus();
+      if (!window.matchMedia("(hover: none)").matches) inputRef.current?.focus();
     }
   }
 
@@ -254,7 +369,9 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
                 className="drawer-reset"
                 onClick={() => {
                   setMessages([welcome]);
+                  setChips(localSuggestions(profile));
                   setError("");
+                  setNote("");
                   inputRef.current?.focus();
                 }}
                 disabled={messages.length <= 1}
@@ -333,7 +450,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
                 </div>
               </article>
             ))}
-            {loading && (
+            {loading && messages[messages.length - 1]?.role === "user" && (
               <div className="chat-thinking" role="status">
                 <span className="thinking-dot" />
                 <span className="thinking-dot" />
@@ -344,7 +461,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
           </div>
 
           <div className="chat-suggestions" aria-label="Suggested questions">
-            {suggestions.map((suggestion) => (
+            {chips.map((suggestion) => (
               <button
                 key={suggestion}
                 type="button"
@@ -399,6 +516,11 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
               {input.length > 0 ? `${input.length}/600` : translate(locale, "assistant.notMedical")}
             </span>
           </div>
+          {note && (
+            <p className="chat-note" role="status">
+              <Icon name="info" size={13} /> {note}
+            </p>
+          )}
           {error && (
             <p className="chat-error" role="status">
               {error}

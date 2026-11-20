@@ -43,6 +43,7 @@ import { Logo } from "./Logo";
 import { Playbook } from "./Playbook";
 import { usePreferences } from "./PreferencesProvider";
 import { SettingsDialog } from "./SettingsDialog";
+import { ShareRow } from "./ShareRow";
 import { SetupDialog } from "./SetupDialog";
 import { CommunitySection, SwapsSection } from "./SwapsSection";
 import { WeatherGlyph } from "./WeatherGlyph";
@@ -314,6 +315,17 @@ export function SaansApp() {
               {translate(settings.locale, "hero.titleB")}
             </h1>
             <p className="hero-lede">{translate(settings.locale, "hero.lede")}</p>
+            {advice && (
+              <div className="hero-share">
+                <ShareRow
+                  title={`${profile.city.name}${profile.city.region ? `, ${profile.city.region}` : ""}`}
+                  value={advice.measurement.value}
+                  scaleLabel={advice.measurement.scaleLabel}
+                  label={advice.measurement.label}
+                  windowLabel={advice.windows.best.label}
+                />
+              </div>
+            )}
             <div className="hero-actions">
               <a className="button button--dark" href="#playbook">
                 {translate(settings.locale, "hero.seePlan")}
