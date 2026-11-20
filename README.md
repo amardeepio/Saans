@@ -15,13 +15,7 @@
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-d9f36a?style=flat-square" />
 </p>
 
-<p align="center">
-  <a href="https://github.com/amardeepio/Saans">Repository</a>
-  ·
-  <a href="https://github.com/amardeepio/Saans/issues">Issues</a>
-  <br />
-  <sub>Saans means breath.</sub>
-</p>
+<p align="center"><sub>Saans means breath.</sub></p>
 
 Saans turns a city’s live air quality into a practical, low-emission plan for a real household. It combines location, household vulnerability, home energy use, daily mobility and budget to answer three questions:
 
