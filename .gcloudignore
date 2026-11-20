@@ -1,0 +1,19 @@
+# Keep local secrets, build output and test artefacts out of the Cloud Build upload.
+.git
+.gitignore
+.gcloudignore
+.env
+.env.local
+.env.*.local
+.env*
+!.env.example
+node_modules
+.next
+out
+build
+coverage
+.screens
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+npm-debug.log*

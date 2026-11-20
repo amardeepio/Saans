@@ -17,6 +17,12 @@
 
 <p align="center"><sub>Saans means breath.</sub></p>
 
+<p align="center">
+  <a href="https://saans-api7jwjpza-uc.a.run.app"><strong>Open the live app →</strong></a>
+  <br />
+  <sub>Deployed on Google Cloud Run · us-central1</sub>
+</p>
+
 Saans turns a city’s live air quality into a practical, low-emission plan for a real household. It combines location, household vulnerability, home energy use, daily mobility and budget to answer three questions:
 
 1. **What should we do today?**
@@ -312,6 +318,111 @@ tests/                       111 unit tests across 25 files
 
 ---
 
+## Live deployment
+
+Saans is deployed on **Google Cloud Run** using Cloud Buildpacks — there is no Dockerfile to maintain.
+
+| Setting | Value |
+| --- | --- |
+| **Live URL** | https://saans-api7jwjpza-uc.a.run.app |
+| **GCP project** | `gen-lang-client-0631726228` |
+| **Service** | `saans` |
+| **Region** | `us-central1` |
+| **Runtime** | Cloud Run (managed), Node.js 22 buildpack |
+| **Memory / CPU** | 1 GiB / 1 vCPU |
+| **Instances** | 0 minimum, 3 maximum |
+| **Access** | Public, unauthenticated |
+
+### How it was deployed
+
+1. **Authenticate and select the project**
+
+   ```bash
+   gcloud auth login
+   gcloud config set project gen-lang-client-0631726228
+   ```
+
+2. **Enable the required APIs** (already enabled for this project)
+
+   ```bash
+   gcloud services enable \
+     run.googleapis.com \
+     cloudbuild.googleapis.com \
+     artifactregistry.googleapis.com \
+     secretmanager.googleapis.com
+   ```
+
+3. **Store secrets in Secret Manager**
+
+   ```bash
+   # Paste the value when prompted; never put keys in source control.
+   gcloud secrets create saans-groq-api-key --data-file=-
+   gcloud secrets create saans-google-translate-api-key --data-file=-
+   ```
+
+   Grant the Cloud Run runtime service account access:
+
+   ```bash
+   for secret in saans-groq-api-key saans-google-translate-api-key; do
+     gcloud secrets add-iam-policy-binding "$secret" \
+       --member="serviceAccount:301104363527-compute@developer.gserviceaccount.com" \
+       --role="roles/secretmanager.secretAccessor"
+   done
+   ```
+
+4. **Deploy from source**
+
+   ```bash
+   gcloud run deploy saans \
+     --source . \
+     --region us-central1 \
+     --platform managed \
+     --allow-unauthenticated \
+     --port 3000 \
+     --memory 1Gi \
+     --cpu 1 \
+     --min-instances 0 \
+     --max-instances 3 \
+     --timeout 60 \
+     --set-env-vars AI_BASE_URL=https://api.groq.com/openai/v1,AI_MODEL=openai/gpt-oss-120b \
+     --set-secrets GROQ_API_KEY=saans-groq-api-key:latest,GOOGLE_TRANSLATE_API_KEY=saans-google-translate-api-key:latest
+   ```
+
+   Cloud Buildpacks detect the Node.js/Next.js app, run `npm run build`, and start it with `npm start`. `PORT` is supplied by Cloud Run.
+
+`.gcloudignore` keeps `.env.local`, `.next`, `node_modules`, coverage and screenshots out of the uploaded source. Secrets are mounted from Secret Manager at runtime, never baked into the image.
+
+### Redeploying
+
+After a code change:
+
+```bash
+npm run check
+gcloud run deploy saans --source . --region us-central1
+```
+
+To update a secret and roll it into the service, add a new secret version and redeploy so Cloud Run creates a revision with the new value:
+
+```bash
+printf '%s' "$NEW_KEY" | gcloud secrets versions add saans-google-translate-api-key --data-file=-
+gcloud run deploy saans --source . --region us-central1
+```
+
+### Checking the deployment
+
+```bash
+gcloud run services describe saans --region us-central1
+gcloud run services logs read saans --region us-central1 --limit 50
+```
+
+### Removing it
+
+```bash
+gcloud run services delete saans --region us-central1
+```
+
+---
+
 ## Run locally
 
 Requires **Node.js 22+**.
@@ -436,8 +547,10 @@ The CI workflow fails below 80% lines, 75% statements, 75% functions or 60% bran
 
 ### Deployment notes
 
-- Set `GROQ_API_KEY` (or `AI_API_KEY`) as a server environment variable in your host.
-- Optionally set `GOOGLE_TRANSLATE_API_KEY` for Hindi plan/assistant translation. Keep it server-only.
+- The public deployment is on **Google Cloud Run** in `us-central1`; see [Live deployment](#live-deployment) for the exact commands and settings.
+- `GROQ_API_KEY` and `GOOGLE_TRANSLATE_API_KEY` are mounted from **Secret Manager**, not stored in the image or uploaded source. `.gcloudignore` excludes `.env.local` and other local secrets.
+- `AI_BASE_URL` and `AI_MODEL` are plain runtime environment variables.
+- Cloud Run scales to zero; the first request after an idle period can take a moment while the instance starts.
 - In a multi-instance deployment, replace the in-memory limiter with a shared store (for example Redis or the platform’s rate-limit service).
 - Background Web Push needs a subscription store, VAPID keys and a scheduled sender. The current build ships local notifications, calendar export and the service-worker push handler; it does not persist push subscriptions.
 - Open-Meteo needs no API key. Respect its attribution and usage guidance.
