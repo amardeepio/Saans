@@ -92,6 +92,10 @@ describe("profile validation", () => {
     expect(air?.source).toBe("open-meteo");
     expect(air?.category).toBe("hazardous");
     expect(air?.categoryLabel).toBe("Hazardous");
+    expect(air?.weather.temperatureC).toBeGreaterThan(-60);
+    expect(air?.weather.source).toBe("sample");
+    expect(air?.co).toBe(0);
+    expect(air?.so2).toBe(0);
   });
 
   it("rejects an absent or negative AQI", () => {

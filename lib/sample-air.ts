@@ -1,5 +1,6 @@
 import { aqiToPm25, aqiCategory, pm25ToAqi } from "./aqi";
 import type { AirReading, City } from "./types";
+import { sampleWeather } from "./weather";
 
 const WINTER_BASELINES: Record<string, number> = {
   delhi: 286,
@@ -87,10 +88,13 @@ export function sampleReading(city: City, now = new Date()): AirReading {
     pm25: aqiToPm25(currentAqi),
     pm10: Math.round(aqiToPm25(currentAqi) * 1.9 * 10) / 10,
     no2: Math.round((18 + (hash(city.id) % 45)) * 10) / 10,
+    co: Math.round(380 + currentAqi * 4 + (hash(`${city.id}-co`) % 280)),
+    so2: Math.round((6 + (hash(`${city.id}-so2`) % 26) + currentAqi * 0.12) * 10) / 10,
     o3: Math.round((22 + (hash(`${city.id}-ozone`) % 38)) * 10) / 10,
     category: category.category,
     categoryLabel: category.label,
     source: "sample",
+    weather: sampleWeather(city, now),
     hourly,
   };
 }

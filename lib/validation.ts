@@ -1,5 +1,6 @@
 import { aqiCategory } from "./aqi";
 import { DEFAULT_PROFILE } from "./cities";
+import { sampleWeather, weatherLabel } from "./weather";
 import type {
   AirReading,
   Budget,
@@ -134,6 +135,24 @@ export function sanitiseAirReading(value: unknown, profile: Profile): AirReading
   const pm25 = int(input.pm25, 0, 0, 2000);
   const categoryInfo = aqiCategory(aqi);
   const source = input.source === "open-meteo" ? "open-meteo" : "sample";
+  const weatherInput = object(input.weather);
+  const fallbackWeather = sampleWeather(profile.city);
+  const weatherCode = int(weatherInput.code, fallbackWeather.code, 0, 99);
+  const weather = {
+    temperatureC: int(weatherInput.temperatureC, fallbackWeather.temperatureC, -60, 60),
+    apparentTemperatureC: int(
+      weatherInput.apparentTemperatureC,
+      fallbackWeather.apparentTemperatureC,
+      -70,
+      70,
+    ),
+    humidity: int(weatherInput.humidity, fallbackWeather.humidity, 0, 100),
+    windKph: int(weatherInput.windKph, fallbackWeather.windKph, 0, 250),
+    code: weatherCode,
+    label: weatherLabel(weatherCode),
+    source: weatherInput.source === "open-meteo" ? ("open-meteo" as const) : ("sample" as const),
+  };
+
   const hourly = Array.isArray(input.hourly)
     ? input.hourly
         .slice(0, 48)
@@ -154,11 +173,14 @@ export function sanitiseAirReading(value: unknown, profile: Profile): AirReading
     aqi,
     pm25,
     pm10: int(input.pm10, 0, 0, 3000),
-    no2: int(input.no2, 0, 0, 2000),
-    o3: int(input.o3, 0, 0, 2000),
+    co: int(input.co, 0, 0, 10_000),
+    so2: int(input.so2, 0, 0, 2_000),
+    no2: int(input.no2, 0, 0, 2_000),
+    o3: int(input.o3, 0, 0, 2_000),
     category: categoryInfo.category,
     categoryLabel: categoryInfo.label,
     source,
+    weather,
     hourly:
       hourly.length > 1
         ? hourly

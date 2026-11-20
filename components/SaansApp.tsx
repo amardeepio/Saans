@@ -15,11 +15,13 @@ import {
 import { AqiOrb } from "./AqiOrb";
 import { Assistant } from "./Assistant";
 import { ChoiceLab } from "./ChoiceLab";
+import { CityPulse } from "./CityPulse";
 import { Icon } from "./Icon";
 import { Logo } from "./Logo";
 import { Playbook } from "./Playbook";
 import { SetupDialog } from "./SetupDialog";
 import { CommunitySection, SwapsSection } from "./SwapsSection";
+import { WeatherGlyph } from "./WeatherGlyph";
 
 function cityQuery(city: Profile["city"]): string {
   const params = new URLSearchParams({
@@ -120,6 +122,7 @@ export function SaansApp() {
           <nav className="main-nav" aria-label="Primary navigation">
             <a href="#playbook">Today</a>
             <a href="#choices">Choices</a>
+            <a href="/dashboard">Dashboard</a>
             <button type="button" className="nav-button" onClick={() => setAssistantOpen(true)}>
               Ask
             </button>
@@ -137,6 +140,12 @@ export function SaansApp() {
           </div>
         </div>
       </header>
+
+      <CityPulse
+        onUseCity={(city) =>
+          saveProfile({ ...profile, city, updatedAt: new Date().toISOString() })
+        }
+      />
 
       <main>
         <section className="hero" aria-labelledby="hero-title">
@@ -187,6 +196,16 @@ export function SaansApp() {
                     {profile.city.name}
                     {profile.city.region ? `, ${profile.city.region}` : ""}
                   </h2>
+                  {air && (
+                    <p className="air-weather-line">
+                      <WeatherGlyph code={air.weather.code} size={16} />
+                      <strong>{Math.round(air.weather.temperatureC)}°C</strong>
+                      <span>{air.weather.label}</span>
+                      <span className="air-weather-feels">
+                        Feels {Math.round(air.weather.apparentTemperatureC)}° · {air.weather.humidity}% humidity
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <button type="button" className="air-location-button" onClick={() => setSetupOpen(true)}>
                   <Icon name="pin" size={15} />
@@ -323,6 +342,7 @@ export function SaansApp() {
           <nav className="footer-nav" aria-label="Footer navigation">
             <a href="#playbook">Today</a>
             <a href="#choices">Choices lab</a>
+            <a href="/dashboard">India dashboard</a>
             <button type="button" className="footer-nav-button" onClick={() => setAssistantOpen(true)}>
               Ask Saans
             </button>

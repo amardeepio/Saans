@@ -69,19 +69,40 @@ export interface HourlyAir {
   pm25: number;
 }
 
-export interface AirReading {
+export interface WeatherSnapshot {
+  temperatureC: number;
+  apparentTemperatureC: number;
+  humidity: number;
+  windKph: number;
+  code: number;
+  label: string;
+  source: "open-meteo" | "sample";
+}
+
+export interface PollutantReadings {
+  pm25: number;
+  pm10: number;
+  co: number;
+  so2: number;
+  no2: number;
+  o3: number;
+}
+
+export interface CityDetail extends PollutantReadings {
   city: City;
   observedAt: string;
   aqi: number;
-  pm25: number;
-  pm10: number;
-  no2: number;
-  o3: number;
   category: AqiCategory;
   categoryLabel: string;
   source: "open-meteo" | "sample";
+  weather: WeatherSnapshot;
+}
+
+export interface AirReading extends CityDetail {
   hourly: HourlyAir[];
 }
+
+export type CityPulseItem = CityDetail;
 
 export type ActionCategory =
   | "health"

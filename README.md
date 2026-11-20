@@ -25,6 +25,17 @@ The experience is a location-aware dashboard and a grounded AI chat assistant th
   </tr>
 </table>
 
+<table>
+  <tr>
+    <td width="58%"><img src="docs/dashboard.jpg" alt="Saans India dashboard showing top polluted cities, search and pollutant cards" /></td>
+    <td width="42%"><img src="docs/city-detail.jpg" alt="City detail dialog showing Mumbai AQI, weather and six pollutant cards" /></td>
+  </tr>
+  <tr>
+    <td><sub>Top polluted tracked cities, India-only search and a live pollutant watch.</sub></td>
+    <td><sub>Click any metro card for a complete city air report.</sub></td>
+  </tr>
+</table>
+
 ---
 
 ## Chosen vertical
@@ -37,7 +48,11 @@ The primary persona is a multi-generational household in the Indo-Gangetic plain
 
 ## What the app does
 
-- **Live location context** — city search, browser geolocation, and live air quality from the free Open-Meteo API.
+- **Live location context** — city search, browser geolocation, live air quality and current weather in Celsius from the free Open-Meteo API.
+- **Metro pulse** — a compact strip directly below the header with AQI and temperature for Mumbai, Delhi, Chennai, Kolkata and Bengaluru.
+- **Clickable city reports** — open any metro card for AQI, weather in °C and six major pollutants: PM2.5, PM10, CO, SO2, NO2 and O3.
+- **India dashboard** — `/dashboard` ranks 24 major tracked Indian cities by AQI, provides India-only location search and shows a selected city’s pollutant mix.
+- **Pollutant cards** — dark, colour-coded readings with WHO guideline comparisons and plain-language context.
 - **Household-aware risk** — children, older adults, pregnancy, respiratory conditions and pets change the plan’s weight, not just the colour of a badge.
 - **A daily playbook** — 6–9 time-ordered actions across the school run, commute, kitchen, cleaning, outdoor window, sleep and community.
 - **Direct impact for every choice** — estimated PM2.5 exposure reduction, CO₂e avoided per month, rupee savings/cost and effort level.
@@ -56,7 +71,7 @@ Saans collects only what changes the advice:
 
 | Context | Why it matters |
 | --- | --- |
-| City / coordinates | Outdoor AQI and the cleanest two-hour window |
+| City / coordinates | Outdoor AQI, weather in °C and the cleanest two-hour window |
 | Adults, children, older adults | Vulnerability weighting |
 | Respiratory condition, pregnancy | Higher protection threshold |
 | Cooking fuel, indoor smoke, purifier | Controllable indoor sources |
@@ -131,7 +146,8 @@ The assistant has two layers:
 ```text
 Browser
   ├─ 3-step household setup (local state + localStorage)
-  ├─ dashboard / daily playbook / choices lab / community kit
+  ├─ daily playbook / choices lab / community kit / pollutant reports
+  ├─ /dashboard: India ranking + India-only search
   ├─ chat drawer (floating button)
   └─ POST /api/chat
         ├─ same-origin check + in-memory rate limit + 24 KB body cap
@@ -142,9 +158,12 @@ Browser
         └─ JSON answer (no storage)
 
 Server routes
-  ├─ GET /api/air?lat&lon…     → Open-Meteo current + 24h forecast
+  ├─ GET /api/air?lat&lon…     → Open-Meteo current + 24h forecast + weather
   │                              → labelled sample fallback on failure
+  ├─ GET /api/cities           → five metro summaries (AQI, °C, pollutants)
+  ├─ GET /api/india-cities     → 24-city India ranking (batched, cached 15 min)
   └─ GET /api/geocode?q=…      → curated cities + Open-Meteo geocoding
+                                 (`country=IN` filters server-side)
 ```
 
 ### Project structure
@@ -152,8 +171,11 @@ Server routes
 ```text
 app/
   api/air/route.ts           Live air reading + sample fallback
+  api/cities/route.ts        Five-metro AQI, weather and pollutant summaries
+  api/india-cities/route.ts  24-city India ranking (one batched upstream call)
   api/chat/route.ts          Validated, rate-limited assistant endpoint
-  api/geocode/route.ts       City search
+  api/geocode/route.ts       City search, optional India-only filter
+  dashboard/page.tsx         India city dashboard
   globals.css                Design system and responsive layout
   layout.tsx                 Metadata, viewport, accessibility foundations
   page.tsx                   Server entry
@@ -161,6 +183,11 @@ app/
 components/
   SaansApp.tsx               Client dashboard composition
   AqiOrb.tsx                 AQI visual with source + category
+  CityPulse.tsx              Five-metro AQI and °C strip below the header
+  CityDetailDialog.tsx       Accessible city AQI + weather + pollutant report
+  DashboardApp.tsx           India ranking + India-only search
+  PollutantGrid.tsx          Six-card pollutant watch
+  WeatherGlyph.tsx           WMO weather-code icons
   Playbook.tsx               Timeline, risk, windows and impact ledger
   ChoiceLab.tsx              Interactive swap simulator
   Assistant.tsx              Floating button + right-side chat drawer
@@ -173,9 +200,12 @@ lib/
   assistant.ts               Intent-aware local assistant
   ai.ts                      Optional GenAI + output safety guard
   sample-air.ts              Deterministic, clearly-labelled sample data
+  weather.ts                 Celsius weather labels and sample fallback
+  pollutants.ts              Pollutant metadata, units and WHO comparisons
+  india.ts                   India-only filtering and tracked-city universe
   validation.ts              Input clamping and local-storage schema
   rate-limit.ts              Small in-memory limiter
-tests/                       42 unit tests (engine, AI guard, validation…)
+tests/                       51 unit tests (engine, AI guard, pollutants…)
 ```
 
 ---
@@ -227,13 +257,17 @@ The suite covers:
 - EPA PM2.5/AQI breakpoints and inverse mapping
 - Risk escalation for sensitive households
 - Advice generation across household types, fuels, commute modes and AQI bands
+- Weather code labels and deterministic Celsius sample data
+- Batched air + weather parsing for multi-city views
+- Pollutant units, CO conversion and WHO comparison text
+- India-only geocoding filters and tracked-city integrity
 - The 45% household exposure cap
 - Local assistant intent routing, medical red flags and script-injection attempts
 - GenAI markdown cleanup, unsafe-output rejection and offline fallback
 - Profile/air input clamping, versioned storage and malformed data
 - Rate-limit windows and proxy key derivation
 
-Run:
+**51 tests across 10 files.** Run:
 
 ```bash
 npm test
@@ -284,7 +318,7 @@ npm test
 ## Limitations
 
 - Exposure and carbon values are simplified models, not sensor readings or a formal health risk assessment.
-- Open-Meteo forecasts can lag real-time conditions; the UI labels observation time and sample fallback.
+- Open-Meteo air and weather forecasts can lag real-time conditions; the UI labels observation time and sample fallback. All temperatures are shown in Celsius.
 - The local assistant is intentionally bounded. The GenAI layer handles broader phrasing when configured.
 - The in-memory limiter resets on redeploy and is per instance.
 
