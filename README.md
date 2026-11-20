@@ -2,6 +2,8 @@
 
 **A family air copilot for severe winter smog and urban air pollution.**
 
+[Repository](https://github.com/amardeepio/Saans) · [CI](https://github.com/amardeepio/Saans/actions/workflows/ci.yml)
+
 Saans (Hindi for “breath”) turns a city’s live air quality into a practical, low-emission plan for a real household. It combines location, household vulnerability, home energy use, daily mobility and budget to answer three questions:
 
 1. **What should we do today?**
@@ -215,8 +217,8 @@ tests/                       51 unit tests (engine, AI guard, pollutants…)
 Requires **Node.js 22+**.
 
 ```bash
-git clone <repository-url>
-cd saans
+git clone https://github.com/amardeepio/Saans.git
+cd Saans
 npm ci
 npm run dev
 ```
