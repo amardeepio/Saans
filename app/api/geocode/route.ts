@@ -1,4 +1,5 @@
 import { CITIES } from "@/lib/cities";
+import { rateLimitResponse } from "@/lib/http";
 import { isIndianCity, isIndianGeocodeResult } from "@/lib/india";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { sanitiseCity } from "@/lib/validation";
@@ -78,9 +79,10 @@ async function remoteMatches(query: string, indiaOnly: boolean): Promise<City[]>
 export async function GET(request: Request): Promise<Response> {
   const limiter = rateLimit(clientKey(request.headers, "geocode"), 40, 60_000);
   if (!limiter.allowed) {
-    return Response.json(
-      { error: "Too many searches. Please wait a moment.", results: [] },
-      { status: 429, headers: { "Retry-After": String(limiter.retryAfterSeconds) } },
+    return rateLimitResponse(
+      limiter.retryAfterSeconds,
+      "Too many searches. Please wait a moment.",
+      { results: [] },
     );
   }
 

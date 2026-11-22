@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CITIES, cityLabel, DEFAULT_PROFILE, findCity } from "@/lib/cities";
+import { buildCityQuery, CITIES, cityLabel, DEFAULT_PROFILE, findCity } from "@/lib/cities";
 
 describe("city catalogue", () => {
   it("finds tracked cities and formats region labels", () => {
@@ -7,6 +7,19 @@ describe("city catalogue", () => {
     expect(findCity("missing")).toBeUndefined();
     expect(cityLabel(DEFAULT_PROFILE.city)).toContain("Delhi");
     expect(cityLabel(CITIES.find((city) => city.id === "mumbai")!)).toBe("Mumbai, Maharashtra");
+    expect(cityLabel(CITIES.find((city) => city.id === "chandigarh")!)).toBe("Chandigarh");
+  });
+
+  it("serialises city coordinates and optional region into query parameters", () => {
+    const withRegion = new URLSearchParams(buildCityQuery(DEFAULT_PROFILE.city));
+    expect(withRegion.get("id")).toBe("delhi");
+    expect(withRegion.get("region")).toBe("NCT");
+
+    const withoutRegion = new URLSearchParams(
+      buildCityQuery(CITIES.find((city) => city.id === "chandigarh")!),
+    );
+    expect(withoutRegion.get("id")).toBe("chandigarh");
+    expect(withoutRegion.has("region")).toBe(false);
   });
 
   it("keeps the default profile internally consistent", () => {

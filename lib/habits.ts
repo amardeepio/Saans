@@ -176,8 +176,8 @@ export function habitStreak(state: HabitState, todayKey = localDateKey()): numbe
 export function weeklySummary(
   state: HabitState,
   endKey = localDateKey(),
+  todayKey = endKey,
 ): HabitSummary[] {
-  const today = localDateKey();
   return Array.from({ length: 7 }, (_, index) => {
     const key = addDays(endKey, index - 6);
     const day = state.days[key];
@@ -194,7 +194,7 @@ export function weeklySummary(
       completed,
       total,
       percent: total > 0 ? Math.round((completed / total) * 100) : 0,
-      isToday: key === today,
+      isToday: key === todayKey,
     };
   });
 }

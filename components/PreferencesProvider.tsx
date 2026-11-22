@@ -9,10 +9,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useClientValue } from "@/hooks/useClientValue";
 import {
   DEFAULT_SETTINGS,
-  loadSettings,
+  sanitiseSettings,
   saveSettings,
+  SETTINGS_STORAGE_KEY,
   type AlertPreferences,
   type AppSettings,
 } from "@/lib/settings";
@@ -30,14 +32,29 @@ interface PreferencesContextValue {
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
 
-export function PreferencesProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [hydrated, setHydrated] = useState(false);
+function readRawSettings(): string | null {
+  try {
+    return window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
 
-  useEffect(() => {
-    setSettings(loadSettings());
-    setHydrated(true);
-  }, []);
+function parseRawSettings(raw: string | null): AppSettings {
+  if (!raw) return DEFAULT_SETTINGS;
+  try {
+    return sanitiseSettings(JSON.parse(raw));
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+export function PreferencesProvider({ children }: { children: ReactNode }) {
+  const hydrated = useClientValue(() => true, false);
+  const rawStored = useClientValue(readRawSettings, null);
+  const storedSettings = useMemo(() => parseRawSettings(rawStored), [rawStored]);
+  const [override, setOverride] = useState<AppSettings | null>(null);
+  const settings = override ?? storedSettings;
 
   useEffect(() => {
     if (!hydrated) return;
@@ -47,24 +64,43 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.simple = settings.simpleMode ? "true" : "false";
   }, [settings, hydrated]);
 
-  const setAqiStandard = useCallback((aqiStandard: AqiStandard) => {
-    setSettings((current) => ({ ...current, aqiStandard }));
-  }, []);
+  const updateSettings = useCallback(
+    (updater: (current: AppSettings) => AppSettings) => {
+      setOverride((current) => updater(current ?? storedSettings));
+    },
+    [storedSettings],
+  );
 
-  const setLocale = useCallback((locale: Locale) => {
-    setSettings((current) => ({ ...current, locale }));
-  }, []);
+  const setAqiStandard = useCallback(
+    (aqiStandard: AqiStandard) => {
+      updateSettings((current) => ({ ...current, aqiStandard }));
+    },
+    [updateSettings],
+  );
 
-  const setSimpleMode = useCallback((simpleMode: boolean) => {
-    setSettings((current) => ({ ...current, simpleMode }));
-  }, []);
+  const setLocale = useCallback(
+    (locale: Locale) => {
+      updateSettings((current) => ({ ...current, locale }));
+    },
+    [updateSettings],
+  );
 
-  const updateAlerts = useCallback((patch: Partial<AlertPreferences>) => {
-    setSettings((current) => ({
-      ...current,
-      alerts: { ...current.alerts, ...patch },
-    }));
-  }, []);
+  const setSimpleMode = useCallback(
+    (simpleMode: boolean) => {
+      updateSettings((current) => ({ ...current, simpleMode }));
+    },
+    [updateSettings],
+  );
+
+  const updateAlerts = useCallback(
+    (patch: Partial<AlertPreferences>) => {
+      updateSettings((current) => ({
+        ...current,
+        alerts: { ...current.alerts, ...patch },
+      }));
+    },
+    [updateSettings],
+  );
 
   const value = useMemo(
     () => ({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useClientValue } from "@/hooks/useClientValue";
 import { translate } from "@/lib/i18n";
 import { buildShareLinks, buildShareText, shareUrl } from "@/lib/share";
 import { SITE_URL } from "@/lib/site";
@@ -53,14 +54,12 @@ export function ShareRow({
 }: ShareRowProps) {
   const { settings } = usePreferences();
   const locale = settings.locale;
-  const [origin, setOrigin] = useState(SITE_URL);
+  const origin = useClientValue(() => window.location.origin || SITE_URL, SITE_URL);
   const [copied, setCopied] = useState(false);
-  const [canNativeShare, setCanNativeShare] = useState(false);
-
-  useEffect(() => {
-    if (window.location.origin) setOrigin(window.location.origin);
-    setCanNativeShare(typeof navigator !== "undefined" && typeof navigator.share === "function");
-  }, []);
+  const canNativeShare = useClientValue(
+    () => typeof navigator !== "undefined" && typeof navigator.share === "function",
+    false,
+  );
 
   useEffect(() => {
     if (!copied) return;

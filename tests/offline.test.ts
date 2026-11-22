@@ -27,5 +27,13 @@ describe("offline reading cache", () => {
   it("ignores malformed cache data", () => {
     store.set("saans.air-cache.v1", "{not json");
     expect(getCachedReading(DEFAULT_CITY.id)).toBeNull();
+    expect(getCachedReadingAge(DEFAULT_CITY.id)).toBeNull();
+  });
+
+  it("handles missing window gracefully during SSR", () => {
+    vi.stubGlobal("window", undefined);
+    const reading = sampleReading(DEFAULT_CITY, new Date(2026, 10, 20, 9));
+    expect(() => cacheReading(reading)).not.toThrow();
+    expect(getCachedReading(DEFAULT_CITY.id)).toBeNull();
   });
 });

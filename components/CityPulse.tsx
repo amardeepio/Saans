@@ -21,6 +21,7 @@ function samplePulse(): CityDetail[] {
     if (!city) return [];
     const reading = sampleReading(city);
     const { hourly: _hourly, ...detail } = reading;
+    void _hourly;
     return [detail];
   });
 }

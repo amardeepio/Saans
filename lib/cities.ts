@@ -72,3 +72,15 @@ export function findCity(id: string): City | undefined {
 export function cityLabel(city: City): string {
   return city.region ? `${city.name}, ${city.region}` : city.name;
 }
+
+export function buildCityQuery(city: City): string {
+  const params = new URLSearchParams({
+    id: city.id,
+    name: city.name,
+    country: city.country,
+    lat: String(city.latitude),
+    lon: String(city.longitude),
+  });
+  if (city.region) params.set("region", city.region);
+  return params.toString();
+}

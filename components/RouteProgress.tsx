@@ -29,11 +29,6 @@ export function RouteProgress() {
       timer.current = window.setTimeout(() => setActive(false), 2_500);
     }
 
-    function finish() {
-      clearTimer();
-      timer.current = window.setTimeout(() => setActive(false), 320);
-    }
-
     function onClick(event: MouseEvent) {
       if (event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

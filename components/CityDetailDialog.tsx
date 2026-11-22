@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { formatNumber, formatObservedAt } from "@/lib/format";
 import { measurementFor } from "@/lib/measurement";
 import type { City, CityDetail } from "@/lib/types";
@@ -19,15 +20,14 @@ export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialo
   const { settings } = usePreferences();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const triggerRef = useRef<HTMLElement | null>(null);
   const measurement = measurementFor(settings.aqiStandard, detail);
   const sourceLabel =
     detail.source === "open-meteo" ? "Live · Open-Meteo" : "Sample · live data unavailable";
 
+  useDialogFocus(true, dialogRef);
+
   useEffect(() => {
     const dialog = dialogRef.current;
-    triggerRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (dialog && !dialog.open) dialog.showModal();
     document.body.classList.add("city-dialog-open");
     const timer = window.setTimeout(() => closeRef.current?.focus(), 90);
@@ -36,7 +36,6 @@ export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialo
       window.clearTimeout(timer);
       if (dialog?.open) dialog.close();
       document.body.classList.remove("city-dialog-open");
-      triggerRef.current?.focus();
     };
   }, []);
 

@@ -1,6 +1,7 @@
 import { askGenAi, cleanAnswerText, containsUnsafeAdvice, isGenAiConfigured, streamGenAi } from "@/lib/ai";
 import { buildLocalAnswer } from "@/lib/assistant";
 import { buildAdvice } from "@/lib/engine";
+import { isSameOrigin, rateLimitResponse, readBoundedJson } from "@/lib/http";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { sampleReading } from "@/lib/sample-air";
 import { translateTexts } from "@/lib/translate";
@@ -24,16 +25,6 @@ interface ChatBody {
   standard?: unknown;
 }
 
-function isSameOrigin(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
-  try {
-    return new URL(origin).host === request.headers.get("host");
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(request: Request): Promise<Response> {
   if (!isSameOrigin(request)) {
     return Response.json({ error: "Cross-origin requests are not allowed." }, { status: 403 });
@@ -41,33 +32,17 @@ export async function POST(request: Request): Promise<Response> {
 
   const limiter = rateLimit(clientKey(request.headers, "chat"), 16, 60_000);
   if (!limiter.allowed) {
-    return Response.json(
-      { error: "The assistant is taking a short break. Try again in a minute." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(limiter.retryAfterSeconds),
-          "Cache-Control": "no-store",
-        },
-      },
+    return rateLimitResponse(
+      limiter.retryAfterSeconds,
+      "The assistant is taking a short break. Try again in a minute.",
+      undefined,
+      { noStore: true },
     );
   }
 
-  const declaredLength = Number(request.headers.get("content-length") ?? "0");
-  if (declaredLength > MAX_BODY_BYTES) {
-    return Response.json({ error: "Request is too large." }, { status: 413 });
-  }
-
-  let body: ChatBody;
-  try {
-    const raw = await request.text();
-    if (raw.length > MAX_BODY_BYTES) {
-      return Response.json({ error: "Request is too large." }, { status: 413 });
-    }
-    body = JSON.parse(raw) as ChatBody;
-  } catch {
-    return Response.json({ error: "Invalid request." }, { status: 400 });
-  }
+  const parsed = await readBoundedJson<ChatBody>(request, MAX_BODY_BYTES);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   const message = sanitiseChatText(body.message);
   if (!message) {

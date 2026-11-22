@@ -1,4 +1,5 @@
 import { getCityDetails } from "@/lib/air";
+import { rateLimitResponse } from "@/lib/http";
 import { INDIA_TRACKED_CITIES, INDIA_TRACKED_IDS } from "@/lib/india";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 
@@ -7,9 +8,10 @@ export const runtime = "nodejs";
 export async function GET(request: Request): Promise<Response> {
   const limiter = rateLimit(clientKey(request.headers, "india-cities"), 30, 60_000);
   if (!limiter.allowed) {
-    return Response.json(
-      { error: "Too many requests. Please wait a moment.", cities: [], trackedCount: 0 },
-      { status: 429, headers: { "Retry-After": String(limiter.retryAfterSeconds) } },
+    return rateLimitResponse(
+      limiter.retryAfterSeconds,
+      "Too many requests. Please wait a moment.",
+      { cities: [], trackedCount: 0 },
     );
   }
 

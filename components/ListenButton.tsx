@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useClientValue } from "@/hooks/useClientValue";
 import { canSpeak, speak, stopSpeaking } from "@/lib/speech";
 import type { Locale } from "@/lib/types";
 import { Icon } from "./Icon";
@@ -15,11 +16,7 @@ export function ListenButton({
   label?: string;
 }) {
   const [speaking, setSpeaking] = useState(false);
-  const [supported, setSupported] = useState(false);
-
-  useEffect(() => {
-    setSupported(canSpeak());
-  }, []);
+  const supported = useClientValue(canSpeak, false);
 
   if (!supported) return null;
 

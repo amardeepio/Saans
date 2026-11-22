@@ -1,3 +1,4 @@
+import { isSameOrigin, rateLimitResponse, readBoundedJson } from "@/lib/http";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { isTranslationConfigured, translateTexts } from "@/lib/translate";
 
@@ -6,16 +7,6 @@ export const runtime = "nodejs";
 const MAX_BODY_BYTES = 20_000;
 const MAX_TEXTS = 80;
 const MAX_TEXT_LENGTH = 900;
-
-function isSameOrigin(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
-  try {
-    return new URL(origin).host === request.headers.get("host");
-  } catch {
-    return false;
-  }
-}
 
 export async function POST(request: Request): Promise<Response> {
   if (!isSameOrigin(request)) {
@@ -30,30 +21,20 @@ export async function POST(request: Request): Promise<Response> {
 
   const limiter = rateLimit(clientKey(request.headers, "translate"), 20, 60_000);
   if (!limiter.allowed) {
-    return Response.json(
-      { error: "Too many translation requests.", translations: null },
-      {
-        status: 429,
-        headers: { "Retry-After": String(limiter.retryAfterSeconds) },
-      },
+    return rateLimitResponse(
+      limiter.retryAfterSeconds,
+      "Too many translation requests.",
+      { translations: null },
     );
   }
 
-  const declaredLength = Number(request.headers.get("content-length") ?? "0");
-  if (declaredLength > MAX_BODY_BYTES) {
-    return Response.json({ error: "Request is too large.", translations: null }, { status: 413 });
-  }
-
-  let body: { texts?: unknown; target?: unknown };
-  try {
-    const raw = await request.text();
-    if (raw.length > MAX_BODY_BYTES) {
-      return Response.json({ error: "Request is too large.", translations: null }, { status: 413 });
-    }
-    body = JSON.parse(raw) as { texts?: unknown; target?: unknown };
-  } catch {
-    return Response.json({ error: "Invalid request.", translations: null }, { status: 400 });
-  }
+  const parsed = await readBoundedJson<{ texts?: unknown; target?: unknown }>(
+    request,
+    MAX_BODY_BYTES,
+    { translations: null },
+  );
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   if (body.target !== "hi") {
     return Response.json({ error: "Unsupported target language.", translations: null }, { status: 400 });

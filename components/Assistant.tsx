@@ -1,33 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { cleanAnswerText } from "@/lib/ai";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAssistantChat } from "@/hooks/useAssistantChat";
+import { useClientValue } from "@/hooks/useClientValue";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { onAskSaans } from "@/lib/ask";
-import { buildLocalAnswer, localSuggestions } from "@/lib/assistant";
 import { sensitiveGroups } from "@/lib/aqi";
 import { formatNumber } from "@/lib/format";
 import { translate } from "@/lib/i18n";
 import { canListen, listenOnce } from "@/lib/speech";
-import type { Advice, AirReading, ChatMessage, ChatStreamEvent, Profile } from "@/lib/types";
+import type { Advice, AirReading, Profile } from "@/lib/types";
+import { ChatLog } from "./assistant/ChatLog";
 import { Icon } from "./Icon";
-import { ListenButton } from "./ListenButton";
 import { usePreferences } from "./PreferencesProvider";
-
-function messageId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function greeting(profile: Profile, air: AirReading, advice: Advice): ChatMessage {
-  const groups = sensitiveGroups(profile.household);
-  return {
-    id: "welcome",
-    role: "assistant",
-    content: `I have ${profile.city.name}'s current reading and your household context.\n\n${advice.measurement.scaleLabel} is ${advice.measurement.value} (${advice.measurement.label}). Today's priority is “${advice.topAction.title}”.\n\nAsk me anything practical — the school run, a purifier, cooking smoke, your commute or how to involve neighbours.${groups.length ? ` I'll keep extra care for ${groups.join(", ")} in view.` : ""}`,
-    mode: "local",
-    createdAt: new Date().toISOString(),
-  };
-}
 
 interface AssistantProps {
   profile: Profile;
@@ -40,15 +25,9 @@ interface AssistantProps {
 export function Assistant({ profile, air, advice, open, onOpenChange }: AssistantProps) {
   const { settings } = usePreferences();
   const locale = settings.locale;
-  const welcome = useMemo(() => greeting(profile, air, advice), [profile, air, advice]);
-  const [messages, setMessages] = useState<ChatMessage[]>([welcome]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
-  const [speechReady, setSpeechReady] = useState(false);
-  const [error, setError] = useState("");
-  const [note, setNote] = useState("");
-  const [chips, setChips] = useState<string[]>(() => localSuggestions(profile));
+  const speechReady = useClientValue(canListen, false);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const fabRef = useRef<HTMLButtonElement>(null);
@@ -56,17 +35,20 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const groups = sensitiveGroups(profile.household);
 
-  useEffect(() => {
-    setMessages([welcome]);
-  }, [welcome]);
-
-  useEffect(() => {
-    setChips(localSuggestions(profile));
-  }, [profile]);
-
-  useEffect(() => {
-    setSpeechReady(canListen());
+  const focusInputIfDesktop = useCallback(() => {
+    if (!window.matchMedia("(hover: none)").matches) inputRef.current?.focus();
   }, []);
+
+  const { messages, chips, loading, error, note, ask, reset } = useAssistantChat({
+    profile,
+    air,
+    advice,
+    locale,
+    aqiStandard: settings.aqiStandard,
+    onFinished: focusInputIfDesktop,
+  });
+
+  useDialogFocus(open, dialogRef);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -75,8 +57,6 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
     if (open && !dialog.open) {
       dialog.showModal();
       document.body.classList.add("chat-open");
-      // Focusing on a touch device pops the keyboard immediately and shifts the
-      // drawer before the user has read anything.
       const touch = window.matchMedia("(hover: none)").matches;
       if (!touch) window.setTimeout(() => inputRef.current?.focus(), 120);
     } else if (!open && dialog.open) {
@@ -124,14 +104,12 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
   useEffect(() => {
     if (!open || !pendingQuestion) return;
     const question = pendingQuestion;
-    // Clearing the pending question inside the timer (not before it) keeps the
-    // effect from tearing down its own timeout on the resulting re-render.
     const timer = window.setTimeout(() => {
       setPendingQuestion(null);
       void ask(question);
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [open, pendingQuestion]);
+  }, [open, pendingQuestion, ask]);
 
   useEffect(() => {
     if (!open) return;
@@ -143,143 +121,20 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
     });
   }, [messages, loading, open]);
 
-  async function ask(rawQuestion: string) {
-    const question = rawQuestion.trim().slice(0, 600);
-    if (!question || loading) return;
-
-    const userMessage: ChatMessage = {
-      id: messageId(),
-      role: "user",
-      content: question,
-      createdAt: new Date().toISOString(),
-    };
-    const history = messages.slice(-6);
-    setMessages((current) => [...current, userMessage]);
-    setInput("");
-    setError("");
-    setNote("");
-    setLoading(true);
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: question,
-          history,
-          profile,
-          air,
-          locale,
-          standard: settings.aqiStandard,
-        }),
-        signal: AbortSignal.timeout(22_000),
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "The assistant could not answer just now.");
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("The assistant could not answer just now.");
-
-      const answerId = messageId();
-      let appended = false;
-      let buffer = "";
-      let mode: "ai" | "local" = "local";
-      let streamNote = "";
-
-      const paint = (text: string, nextMode: "ai" | "local") => {
-        mode = nextMode;
-        if (!appended) {
-          appended = true;
-          setMessages((current) => [
-            ...current,
-            {
-              id: answerId,
-              role: "assistant",
-              content: text,
-              mode: nextMode,
-              createdAt: new Date().toISOString(),
-            },
-          ]);
-          return;
-        }
-        setMessages((current) =>
-          current.map((item) =>
-            item.id === answerId ? { ...item, content: text, mode: nextMode } : item,
-          ),
-        );
-      };
-
-      const handle = (event: ChatStreamEvent) => {
-        if (event.type === "delta" && event.text) {
-          buffer += event.text;
-          paint(cleanAnswerText(buffer), "ai");
-        } else if (event.type === "replace" && typeof event.text === "string") {
-          buffer = event.text;
-          paint(event.text, event.mode ?? mode);
-        } else if (event.type === "done") {
-          mode = event.mode ?? mode;
-          if (event.suggestions?.length) setChips(event.suggestions);
-          if (event.note) streamNote = event.note;
-          if (buffer) paint(buffer, mode);
-        }
-      };
-
-      const decoder = new TextDecoder();
-      let raw = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        raw += decoder.decode(value, { stream: true });
-        const lines = raw.split("\n");
-        raw = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            handle(JSON.parse(line) as ChatStreamEvent);
-          } catch {
-            // Ignore a malformed frame rather than dropping the whole answer.
-          }
-        }
-      }
-
-      if (!appended) throw new Error("The assistant could not answer just now.");
-      setNote(streamNote);
-    } catch (caught) {
-      const fallback = buildLocalAnswer(question, profile, air, advice);
-      setMessages((current) => [
-        ...current,
-        {
-          id: messageId(),
-          role: "assistant",
-          content: fallback.answer,
-          mode: "local",
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      setChips(fallback.suggestions);
-      setNote("");
-      setError(
-        caught instanceof Error && caught.message.includes("short break")
-          ? caught.message
-          : "The live assistant was unavailable, so this answer used Saans's offline household logic.",
-      );
-    } finally {
-      setLoading(false);
-      if (!window.matchMedia("(hover: none)").matches) inputRef.current?.focus();
-    }
+  async function sendQuestion(rawQuestion: string) {
+    const sent = await ask(rawQuestion);
+    if (sent) setInput("");
   }
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
-    void ask(input);
+    void sendQuestion(input);
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      void ask(input);
+      void sendQuestion(input);
     }
   }
 
@@ -321,7 +176,8 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
         <span className="chat-fab-copy">
           <strong>{translate(locale, "assistant.ask")}</strong>
           <small>
-            {advice.measurement.scaleLabel} {formatNumber(advice.measurement.value)} · {profile.city.name}
+            {advice.measurement.scaleLabel} {formatNumber(advice.measurement.value)} ·{" "}
+            {profile.city.name}
           </small>
         </span>
         <span className="chat-fab-live" aria-hidden="true" />
@@ -345,10 +201,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
           if (event.target === dialogRef.current) close();
         }}
       >
-        <div
-          className="drawer-shell"
-          onClick={(event) => event.stopPropagation()}
-        >
+        <div className="drawer-shell" onClick={(event) => event.stopPropagation()}>
           <header className="drawer-header">
             <div className="drawer-identity">
               <span className="chat-avatar" aria-hidden="true">
@@ -368,10 +221,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
                 type="button"
                 className="drawer-reset"
                 onClick={() => {
-                  setMessages([welcome]);
-                  setChips(localSuggestions(profile));
-                  setError("");
-                  setNote("");
+                  reset();
                   inputRef.current?.focus();
                 }}
                 disabled={messages.length <= 1}
@@ -392,7 +242,8 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
           <div className="drawer-context" aria-label="Today's context">
             <span className="drawer-context-chip">
               <Icon name="shield" size={13} />
-              {profile.household.adults + profile.household.children + profile.household.elders} people
+              {profile.household.adults + profile.household.children + profile.household.elders}{" "}
+              people
             </span>
             {groups.length > 0 && (
               <span className="drawer-context-chip drawer-context-chip--warm">
@@ -410,55 +261,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
             </span>
           </div>
 
-          <div
-            className="chat-log"
-            ref={logRef}
-            role="log"
-            aria-label="Conversation with Saans"
-            aria-live="polite"
-            aria-relevant="additions text"
-          >
-            {messages.map((message) => (
-              <article
-                key={message.id}
-                className={`chat-message chat-message--${message.role}`}
-                aria-label={message.role === "assistant" ? "Saans" : "You"}
-              >
-                {message.role === "assistant" && (
-                  <span className="message-mark" aria-hidden="true">
-                    <Icon name="spark" size={14} />
-                  </span>
-                )}
-                <div className="message-body">
-                  <p>{message.content}</p>
-                  {message.role === "assistant" && (
-                    <div className="message-tools">
-                      <ListenButton
-                        text={message.content}
-                        locale={locale}
-                        label={translate(locale, "curve.title")}
-                      />
-                      {message.id !== "welcome" && (
-                        <span className="message-mode">
-                          {message.mode === "ai"
-                            ? translate(locale, "assistant.ai")
-                            : translate(locale, "assistant.local")}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </article>
-            ))}
-            {loading && messages[messages.length - 1]?.role === "user" && (
-              <div className="chat-thinking" role="status">
-                <span className="thinking-dot" />
-                <span className="thinking-dot" />
-                <span className="thinking-dot" />
-                <span>{translate(locale, "assistant.thinking")}</span>
-              </div>
-            )}
-          </div>
+          <ChatLog logRef={logRef} messages={messages} loading={loading} locale={locale} />
 
           <div className="chat-suggestions" aria-label="Suggested questions">
             {chips.map((suggestion) => (
@@ -466,7 +269,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
                 key={suggestion}
                 type="button"
                 className="suggestion-chip"
-                onClick={() => void ask(suggestion)}
+                onClick={() => void sendQuestion(suggestion)}
                 disabled={loading}
               >
                 {suggestion}

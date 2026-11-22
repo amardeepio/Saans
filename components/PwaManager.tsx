@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useClientValue, useIsOffline } from "@/hooks/useClientValue";
 import { Icon } from "./Icon";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -28,24 +29,22 @@ function isStandalone() {
   );
 }
 
+function readDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(DISMISS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function PwaManager() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [offline, setOffline] = useState(false);
+  const offline = useIsOffline();
   const [updateReady, setUpdateReady] = useState(false);
-  const [iosHint, setIosHint] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    setOffline(!navigator.onLine);
-    const onOnline = () => setOffline(false);
-    const onOffline = () => setOffline(true);
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
-    return () => {
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
-    };
-  }, []);
+  const iosHint = useClientValue(() => !isStandalone() && isIosSafari(), false);
+  const initialDismissed = useClientValue(readDismissed, false);
+  const [dismissedOverride, setDismissed] = useState(false);
+  const dismissed = initialDismissed || dismissedOverride;
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
@@ -78,15 +77,6 @@ export function PwaManager() {
   }, []);
 
   useEffect(() => {
-    try {
-      if (window.localStorage.getItem(DISMISS_KEY) === "1") setDismissed(true);
-    } catch {
-      // Safari private mode can refuse storage; fall back to showing the hint.
-    }
-    if (!isStandalone() && isIosSafari()) setIosHint(true);
-  }, []);
-
-  useEffect(() => {
     const handler = (event: Event) => {
       event.preventDefault();
       setInstallEvent(event as BeforeInstallPromptEvent);
@@ -109,7 +99,6 @@ export function PwaManager() {
 
   function dismiss() {
     setDismissed(true);
-    setIosHint(false);
     setInstallEvent(null);
     try {
       window.localStorage.setItem(DISMISS_KEY, "1");

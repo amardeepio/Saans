@@ -1,4 +1,5 @@
 import { getAirReading } from "@/lib/air";
+import { rateLimitResponse } from "@/lib/http";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { sanitiseCity } from "@/lib/validation";
 
@@ -7,12 +8,9 @@ export const runtime = "nodejs";
 export async function GET(request: Request): Promise<Response> {
   const limiter = rateLimit(clientKey(request.headers, "air"), 90, 60_000);
   if (!limiter.allowed) {
-    return Response.json(
-      { error: "Too many requests. Please wait a moment." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(limiter.retryAfterSeconds) },
-      },
+    return rateLimitResponse(
+      limiter.retryAfterSeconds,
+      "Too many requests. Please wait a moment.",
     );
   }
 

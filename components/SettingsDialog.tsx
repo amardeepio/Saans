@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { buildIcs, cleanWindowEvent, downloadIcs } from "@/lib/calendar";
 import { requestNotificationPermission } from "@/lib/alerts";
-import { translate } from "@/lib/i18n";
-import { LOCALE_LABELS } from "@/lib/i18n";
+import { LOCALE_LABELS, translate } from "@/lib/i18n";
 import type { Advice, Locale } from "@/lib/types";
 import { AqiScaleToggle } from "./AqiScaleToggle";
 import { Icon } from "./Icon";
@@ -25,6 +25,8 @@ export function SettingsDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [status, setStatus] = useState("");
+
+  useDialogFocus(open, dialogRef);
 
   useEffect(() => {
     const dialog = dialogRef.current;
