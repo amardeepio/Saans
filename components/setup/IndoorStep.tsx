@@ -1,40 +1,43 @@
 "use client";
 
 import type { RefObject } from "react";
-import type { Profile } from "@/lib/types";
+import { translate, type TranslationKey } from "@/lib/i18n";
+import type { Locale, Profile } from "@/lib/types";
 import { Icon } from "../Icon";
 import { Choice, Toggle } from "./FormControls";
 
 interface IndoorStepProps {
   headingRef: RefObject<HTMLHeadingElement | null>;
   draft: Profile;
+  locale: Locale;
   onUpdateHousehold: (key: keyof Profile["household"], value: number | boolean) => void;
   onUpdateHome: <Key extends keyof Profile["home"]>(key: Key, value: Profile["home"][Key]) => void;
 }
 
 const COOKING_OPTIONS = [
-  ["lpg", "LPG cylinder"],
-  ["piped-gas", "Piped gas"],
-  ["electric", "Electric / induction"],
-  ["biomass", "Wood, coal or dung"],
-] as const;
+  ["lpg", "setup.lpg"],
+  ["piped-gas", "setup.piped"],
+  ["electric", "setup.electric"],
+  ["biomass", "setup.biomass"],
+] as const satisfies ReadonlyArray<readonly [Profile["home"]["cookingFuel"], TranslationKey]>;
 
 const SMOKE_OPTIONS = [
-  ["none", "None"],
-  ["incense", "Incense / coils"],
-  ["coal", "Coal / charcoal"],
-  ["wood", "Wood fire"],
-] as const;
+  ["none", "setup.none"],
+  ["incense", "setup.incense"],
+  ["coal", "setup.coal"],
+  ["wood", "setup.wood"],
+] as const satisfies ReadonlyArray<readonly [Profile["home"]["indoorSmoke"], TranslationKey]>;
 
 const PURIFIER_OPTIONS = [
-  ["none", "None yet"],
-  ["one", "One purifier"],
-  ["multiple", "Two or more"],
-] as const;
+  ["none", "setup.noPurifier"],
+  ["one", "setup.onePurifier"],
+  ["multiple", "setup.multiplePurifier"],
+] as const satisfies ReadonlyArray<readonly [Profile["home"]["purifier"], TranslationKey]>;
 
 export function IndoorStep({
   headingRef,
   draft,
+  locale,
   onUpdateHousehold,
   onUpdateHome,
 }: IndoorStepProps) {
@@ -44,41 +47,38 @@ export function IndoorStep({
         <Icon name="home" size={25} />
       </span>
       <h2 id="setup-title" ref={headingRef} tabIndex={-1}>
-        What does your indoor air face?
+        {translate(locale, "setup.indoorTitle")}
       </h2>
-      <p className="setup-lede">
-        Most exposure happens indoors. These choices let Saans separate the smoke you can control
-        from the smog you cannot.
-      </p>
+      <p className="setup-lede">{translate(locale, "setup.indoorLede")}</p>
 
       <fieldset className="field-block">
-        <legend className="field-label">Extra care needed</legend>
+        <legend className="field-label">{translate(locale, "setup.extraCare")}</legend>
         <div className="toggle-row">
           <Toggle
             checked={draft.household.respiratory}
             onChange={(value) => onUpdateHousehold("respiratory", value)}
           >
-            Asthma or other respiratory condition
+            {translate(locale, "setup.respiratory")}
           </Toggle>
           <Toggle
             checked={draft.household.pregnant}
             onChange={(value) => onUpdateHousehold("pregnant", value)}
           >
-            Pregnancy
+            {translate(locale, "setup.pregnant")}
           </Toggle>
           <Toggle
             checked={draft.household.pets}
             onChange={(value) => onUpdateHousehold("pets", value)}
           >
-            Pets at home
+            {translate(locale, "setup.pets")}
           </Toggle>
         </div>
       </fieldset>
 
       <fieldset className="field-block">
-        <legend className="field-label">Main cooking fuel</legend>
+        <legend className="field-label">{translate(locale, "setup.fuel")}</legend>
         <div className="choice-grid choice-grid--four">
-          {COOKING_OPTIONS.map(([value, label]) => (
+          {COOKING_OPTIONS.map(([value, key]) => (
             <Choice
               key={value}
               name="cooking"
@@ -86,16 +86,16 @@ export function IndoorStep({
               selected={draft.home.cookingFuel === value}
               onSelect={(next) => onUpdateHome("cookingFuel", next)}
             >
-              {label}
+              {translate(locale, key)}
             </Choice>
           ))}
         </div>
       </fieldset>
 
       <fieldset className="field-block">
-        <legend className="field-label">Smoke you create indoors</legend>
+        <legend className="field-label">{translate(locale, "setup.smoke")}</legend>
         <div className="choice-grid choice-grid--four">
-          {SMOKE_OPTIONS.map(([value, label]) => (
+          {SMOKE_OPTIONS.map(([value, key]) => (
             <Choice
               key={value}
               name="smoke"
@@ -103,16 +103,16 @@ export function IndoorStep({
               selected={draft.home.indoorSmoke === value}
               onSelect={(next) => onUpdateHome("indoorSmoke", next)}
             >
-              {label}
+              {translate(locale, key)}
             </Choice>
           ))}
         </div>
       </fieldset>
 
       <fieldset className="field-block">
-        <legend className="field-label">Air purifier at home</legend>
+        <legend className="field-label">{translate(locale, "setup.purifier")}</legend>
         <div className="choice-grid choice-grid--three">
-          {PURIFIER_OPTIONS.map(([value, label]) => (
+          {PURIFIER_OPTIONS.map(([value, key]) => (
             <Choice
               key={value}
               name="purifier"
@@ -120,7 +120,7 @@ export function IndoorStep({
               selected={draft.home.purifier === value}
               onSelect={(next) => onUpdateHome("purifier", next)}
             >
-              {label}
+              {translate(locale, key)}
             </Choice>
           ))}
         </div>

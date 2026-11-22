@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildLocalAnswer, localSuggestions } from "@/lib/assistant";
+import { buildLocalAnswer } from "@/lib/answers";
+import { localSuggestions } from "@/lib/assistant";
 import { DEFAULT_CITY, DEFAULT_PROFILE } from "@/lib/cities";
 import { buildAdvice } from "@/lib/engine";
 import { sampleReading } from "@/lib/sample-air";

@@ -10,7 +10,7 @@ const ADVICE = buildAdvice(
   "naqi",
 );
 
-describe("advice localisation", () => {
+describe("advice localization", () => {
   it("keeps the translated plan structurally intact", () => {
     const strings = collectAdviceStrings(ADVICE);
     const translated = strings.map((value) => `हिं ${value}`);

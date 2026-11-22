@@ -2,10 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { fetchJson, isAbortError } from "@/lib/client-fetch";
 import { CITIES } from "@/lib/cities";
+import { CLIENT_TIMEOUT_MS } from "@/lib/constants";
 import { translate } from "@/lib/i18n";
 import { measurementFor } from "@/lib/measurement";
 import { sampleReading } from "@/lib/sample-air";
+import { sourceStatusLabel } from "@/lib/source";
+import { toCityDetail } from "@/lib/india";
 import { formatNumber } from "@/lib/format";
 import type { City, CityDetail } from "@/lib/types";
 import { CityDetailDialog } from "./CityDetailDialog";
@@ -18,11 +22,7 @@ const METRO_IDS = ["mumbai", "delhi", "chennai", "kolkata", "bengaluru"];
 function samplePulse(): CityDetail[] {
   return METRO_IDS.flatMap((id) => {
     const city = CITIES.find((item) => item.id === id);
-    if (!city) return [];
-    const reading = sampleReading(city);
-    const { hourly: _hourly, ...detail } = reading;
-    void _hourly;
-    return [detail];
+    return city ? [toCityDetail(sampleReading(city))] : [];
   });
 }
 
@@ -34,18 +34,19 @@ export function CityPulse({ onUseCity }: { onUseCity: (city: City) => void }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]);
 
-    fetch("/api/cities", { signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("cities");
-        const data = (await response.json()) as { cities?: CityDetail[] };
-        if (!Array.isArray(data.cities) || data.cities.length < 5) throw new Error("cities-format");
-        return data.cities;
+    fetchJson<{ cities?: CityDetail[] }>("/api/cities", {
+      signal: controller.signal,
+      timeoutMs: CLIENT_TIMEOUT_MS.geocode,
+    })
+      .then((data) => {
+        if (!Array.isArray(data.cities) || data.cities.length < 5) {
+          throw new Error("cities-format");
+        }
+        setCities(data.cities);
       })
-      .then((items) => setCities(items))
       .catch((error) => {
-        if ((error as Error).name !== "AbortError") setCities(fallback);
+        if (!isAbortError(error)) setCities(fallback);
       });
 
     return () => controller.abort();
@@ -54,12 +55,8 @@ export function CityPulse({ onUseCity }: { onUseCity: (city: City) => void }) {
   const items = cities ?? [];
   const liveCount = items.filter((item) => item.source === "open-meteo").length;
   const freshness = cities
-    ? liveCount === items.length
-      ? "Live · Open-Meteo"
-      : liveCount > 0
-        ? "Partly live"
-        : "Sample pattern"
-    : "Reading cities…";
+    ? sourceStatusLabel(liveCount, items.length, settings.locale)
+    : translate(settings.locale, "source.reading");
 
   return (
     <>
@@ -79,7 +76,7 @@ export function CityPulse({ onUseCity }: { onUseCity: (city: City) => void }) {
           <ul
             className="city-pulse-list"
             aria-busy={!cities}
-            aria-label="Metro air quality and temperature. Open a city for pollutants and weather."
+            aria-label={translate(settings.locale, "cityPulse.listLabel")}
           >
             {items.length === 0
               ? METRO_IDS.map((id) => (
@@ -115,7 +112,9 @@ export function CityPulse({ onUseCity }: { onUseCity: (city: City) => void }) {
                         <span className="city-pulse-chevron" aria-hidden="true">
                           <Icon name="chevron" size={14} />
                         </span>
-                        <span className="sr-only">Open air report</span>
+                        <span className="sr-only">
+                          {translate(settings.locale, "cityPulse.openReport")}
+                        </span>
                       </button>
                     </li>
                   );

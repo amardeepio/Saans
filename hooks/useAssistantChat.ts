@@ -3,7 +3,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { cleanAnswerText } from "@/lib/ai";
 import { sensitiveGroups } from "@/lib/aqi";
-import { buildLocalAnswer, localSuggestions } from "@/lib/assistant";
+import { buildLocalAnswer } from "@/lib/answers";
+import { localSuggestions } from "@/lib/assistant";
+import { CHAT_INPUT_MAX, CLIENT_TIMEOUT_MS } from "@/lib/constants";
 import type {
   Advice,
   AirReading,
@@ -109,7 +111,7 @@ export function useAssistantChat({
 
   const ask = useCallback(
     async (rawQuestion: string) => {
-      const question = rawQuestion.trim().slice(0, 600);
+      const question = rawQuestion.trim().slice(0, CHAT_INPUT_MAX);
       if (!question || loading) return false;
 
       const userMessage: ChatMessage = {
@@ -136,7 +138,7 @@ export function useAssistantChat({
             locale,
             standard: aqiStandard,
           }),
-          signal: AbortSignal.timeout(22_000),
+          signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS.chat),
         });
         if (!response.ok) {
           const data = (await response.json().catch(() => null)) as { error?: string } | null;

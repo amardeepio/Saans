@@ -19,7 +19,7 @@ export function ChatLog({ logRef, messages, loading, locale }: ChatLogProps) {
       className="chat-log"
       ref={logRef}
       role="log"
-      aria-label="Conversation with Saans"
+      aria-label={translate(locale, "chat.conversation")}
       aria-live="polite"
       aria-relevant="additions text"
     >
@@ -27,7 +27,11 @@ export function ChatLog({ logRef, messages, loading, locale }: ChatLogProps) {
         <article
           key={message.id}
           className={`chat-message chat-message--${message.role}`}
-          aria-label={message.role === "assistant" ? "Saans" : "You"}
+          aria-label={
+            message.role === "assistant"
+              ? translate(locale, "chat.assistantName")
+              : translate(locale, "chat.you")
+          }
         >
           {message.role === "assistant" && (
             <span className="message-mark" aria-hidden="true">

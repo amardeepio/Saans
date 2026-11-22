@@ -2,13 +2,14 @@
 
 import { useEffect, useRef } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
-import { formatNumber, formatObservedAt } from "@/lib/format";
+import { formatObservedAt } from "@/lib/format";
+import { translate } from "@/lib/i18n";
 import { measurementFor } from "@/lib/measurement";
 import type { City, CityDetail } from "@/lib/types";
+import { CityAqiBadge, CityPollutantNote, CityWeatherFacts } from "./city/CityFacts";
 import { Icon } from "./Icon";
 import { PollutantGrid } from "./PollutantGrid";
 import { usePreferences } from "./PreferencesProvider";
-import { WeatherGlyph } from "./WeatherGlyph";
 
 interface CityDetailDialogProps {
   detail: CityDetail;
@@ -18,11 +19,14 @@ interface CityDetailDialogProps {
 
 export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialogProps) {
   const { settings } = usePreferences();
+  const locale = settings.locale;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const measurement = measurementFor(settings.aqiStandard, detail);
   const sourceLabel =
-    detail.source === "open-meteo" ? "Live · Open-Meteo" : "Sample · live data unavailable";
+    detail.source === "open-meteo"
+      ? translate(locale, "source.live")
+      : translate(locale, "cityReport.sampleSource");
 
   useDialogFocus(true, dialogRef);
 
@@ -56,13 +60,13 @@ export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialo
       <div className="city-detail-shell" onClick={(event) => event.stopPropagation()}>
         <header className="city-detail-hero">
           <div className="city-detail-top">
-            <span className="eyebrow eyebrow--light">City air report</span>
+            <span className="eyebrow eyebrow--light">{translate(locale, "cityReport.eyebrow")}</span>
             <button
               ref={closeRef}
               type="button"
               className="city-detail-close"
               onClick={onClose}
-              aria-label="Close city air report"
+              aria-label={translate(locale, "cityReport.close")}
             >
               <Icon name="close" size={19} />
             </button>
@@ -76,26 +80,10 @@ export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialo
                 {formatObservedAt(detail.observedAt)}
               </p>
             </div>
-            <div className={`city-detail-aqi tone-${measurement.tone}`}>
-              <strong>{formatNumber(measurement.value)}</strong>
-              <span>{measurement.scaleLabel}</span>
-            </div>
+            <CityAqiBadge measurement={measurement} />
           </div>
 
-          <div className="city-detail-weather" aria-label="Current weather">
-            <span className="city-detail-weather-icon">
-              <WeatherGlyph code={detail.weather.code} size={21} />
-            </span>
-            <strong>{Math.round(detail.weather.temperatureC)}°C</strong>
-            <span>{detail.weather.label}</span>
-            <span className="city-detail-weather-extra">
-              Feels {Math.round(detail.weather.apparentTemperatureC)}°
-            </span>
-            <span className="city-detail-weather-extra">
-              {detail.weather.humidity}% humidity
-            </span>
-            <span className="city-detail-weather-extra">{detail.weather.windKph} km/h wind</span>
-          </div>
+          <CityWeatherFacts weather={detail.weather} locale={locale} variant="dialog" />
 
           <p id="city-detail-description" className="city-detail-category">
             <strong>{measurement.label}.</strong> {measurement.advice}
@@ -105,18 +93,14 @@ export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialo
         <div className="city-detail-body">
           <div className="city-detail-section-head">
             <div>
-              <span className="eyebrow">Major pollutants</span>
-              <h3>What is in the air right now</h3>
+              <span className="eyebrow">{translate(locale, "cityReport.pollutants")}</span>
+              <h3>{translate(locale, "cityReport.whatsInAir")}</h3>
             </div>
-            <span className="city-detail-unit-note">WHO comparisons</span>
+            <span className="city-detail-unit-note">{translate(locale, "cityReport.who")}</span>
           </div>
 
           <PollutantGrid readings={detail} standard={settings.aqiStandard} />
-
-          <p className="city-detail-footnote">
-            Pollutant values are ambient concentrations, not personal exposure. WHO comparisons
-            use 2021 guideline values and do not replace a health risk assessment.
-          </p>
+          <CityPollutantNote locale={locale} variant="dialog" />
         </div>
 
         <footer className="city-detail-footer">
@@ -137,12 +121,12 @@ export function CityDetailDialog({ detail, onClose, onUseCity }: CityDetailDialo
                   onClose();
                 }}
               >
-                Use this city for my plan
+                {translate(locale, "cityReport.useCity")}
                 <Icon name="arrow-right" size={15} />
               </button>
             )}
             <button type="button" className="button button--dark button--small" onClick={onClose}>
-              Done
+              {translate(locale, "common.done")}
             </button>
           </div>
         </footer>

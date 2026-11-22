@@ -57,7 +57,7 @@ export function HomeHero({
           </a>
           <button type="button" className="button button--quiet" onClick={onOpenSetup}>
             <Icon name="users" size={17} />
-            {translate(locale, "hero.personalise")}
+            {translate(locale, "hero.personalize")}
           </button>
         </div>
         <div className="hero-trust">
@@ -96,7 +96,7 @@ export function HomeHero({
               {translate(locale, "hero.change")}
             </button>
           </div>
-          <AqiOrb air={air} loading={airLoading} />
+          <AqiOrb air={air} locale={locale} loading={airLoading} />
           {air && advice && (
             <p className="air-category-advice">
               {advice.measurement.label}. {advice.alert ?? advice.atmosphere.ventilationAdvice}

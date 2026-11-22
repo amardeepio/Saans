@@ -20,14 +20,15 @@ import {
   HABITS_STORAGE_KEY,
   habitStreak,
   localDateKey,
-  sanitiseHabits,
+  sanitizeHabits,
   saveHabits,
   toggleHabit,
   weeklySummary,
   type HabitState,
 } from "@/lib/habits";
 import { translate } from "@/lib/i18n";
-import type { Profile } from "@/lib/types";
+import { parseStoredJson, readStorage } from "@/lib/storage";
+import type { AirReading, Locale, Profile } from "@/lib/types";
 import { AqiScaleToggle } from "./AqiScaleToggle";
 import { Assistant } from "./Assistant";
 import { ChoiceLab } from "./ChoiceLab";
@@ -43,33 +44,34 @@ import { SettingsDialog } from "./SettingsDialog";
 import { SetupDialog } from "./SetupDialog";
 import { CommunitySection, SwapsSection } from "./SwapsSection";
 
-function readRawHabits(): string | null {
-  try {
-    return window.localStorage.getItem(HABITS_STORAGE_KEY);
-  } catch {
-    return null;
-  }
+function parseRawHabits(raw: string | null): HabitState {
+  return parseStoredJson(raw, (value) => sanitizeHabits(value), emptyHabits());
 }
 
-function parseRawHabits(raw: string | null): HabitState {
-  if (!raw) return emptyHabits();
-  try {
-    return sanitiseHabits(JSON.parse(raw));
-  } catch {
-    return emptyHabits();
+function readingSourceNote(
+  air: AirReading | null,
+  usedCached: boolean,
+  locale: Locale,
+): string {
+  if (usedCached) {
+    return `${translate(locale, "offline.cached")} · ${
+      air ? formatObservedAt(air.observedAt) : ""
+    }`;
   }
+  if (air?.source === "open-meteo") return translate(locale, "header.live");
+  return air ? translate(locale, "header.sample") : translate(locale, "header.reading");
 }
 
 export function SaansApp() {
   const { settings } = usePreferences();
-  const { profile, saveProfile: persistProfile, personalised, hydrated } = useStoredProfile();
+  const { profile, saveProfile: persistProfile, personalized, hydrated } = useStoredProfile();
   const { air, loading: airLoading, usedCached } = useAirReading(profile, hydrated);
   const advice = useLocalizedAdvice(profile, air, settings.aqiStandard, settings.locale);
 
   const [setupOpen, setSetupOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const rawHabits = useClientValue(readRawHabits, null);
+  const rawHabits = useClientValue(() => readStorage(HABITS_STORAGE_KEY), null);
   const storedHabits = useMemo(() => parseRawHabits(rawHabits), [rawHabits]);
   const [habitsOverride, setHabitsOverride] = useState<HabitState | null>(null);
   const habits = habitsOverride ?? storedHabits;
@@ -131,13 +133,7 @@ export function SaansApp() {
     [persistProfile],
   );
 
-  const sourceNote = usedCached
-    ? `${translate(settings.locale, "offline.cached")} · ${air ? formatObservedAt(air.observedAt) : ""}`
-    : air?.source === "open-meteo"
-      ? translate(settings.locale, "header.live")
-      : air
-        ? translate(settings.locale, "header.sample")
-        : translate(settings.locale, "header.reading");
+  const sourceNote = readingSourceNote(air, usedCached, settings.locale);
 
   return (
     <div id="top" className="app-shell">
@@ -150,7 +146,7 @@ export function SaansApp() {
           <a href="#top" className="brand" aria-label={translate(settings.locale, "brand.home")}>
             <Logo />
           </a>
-          <nav className="main-nav" aria-label="Primary navigation">
+          <nav className="main-nav" aria-label={translate(settings.locale, "nav.primary")}>
             <a href="#playbook">{translate(settings.locale, "nav.today")}</a>
             <a href="#choices">{translate(settings.locale, "nav.choices")}</a>
             <Link href="/dashboard">{translate(settings.locale, "nav.dashboard")}</Link>
@@ -161,7 +157,7 @@ export function SaansApp() {
           </nav>
           <div className="header-actions">
             <AqiScaleToggle compact />
-            <span className="live-pill" title="Air-quality data source">
+            <span className="live-pill" title={translate(settings.locale, "header.sourceTitle")}>
               <span
                 className={`source-dot ${air?.source === "open-meteo" ? "is-live" : ""}`}
                 aria-hidden="true"
@@ -182,7 +178,7 @@ export function SaansApp() {
               onClick={() => setSetupOpen(true)}
             >
               <Icon name="pin" size={15} />
-              {personalised
+              {personalized
                 ? translate(settings.locale, "header.editProfile")
                 : translate(settings.locale, "header.makeMine")}
             </button>
@@ -231,7 +227,7 @@ export function SaansApp() {
 
         <ImpactRibbon
           advice={advice}
-          personalised={personalised}
+          personalized={personalized}
           locale={settings.locale}
           onOpenSetup={() => setSetupOpen(true)}
         />
@@ -255,12 +251,14 @@ export function SaansApp() {
           <section
             className="section loading-section"
             aria-busy="true"
-            aria-label="Loading today's plan"
+            aria-label={translate(settings.locale, "common.loadingPlan")}
           >
             <div className="section-heading">
               <div>
-                <span className="eyebrow">The daily playbook</span>
-                <h2>Reading the sky over {profile.city.name}.</h2>
+                <span className="eyebrow">{translate(settings.locale, "playbook.eyebrow")}</span>
+                <h2>
+                  {translate(settings.locale, "playbook.loading")} {profile.city.name}.
+                </h2>
               </div>
             </div>
             <div className="loading-grid">
@@ -272,7 +270,11 @@ export function SaansApp() {
         )}
       </main>
 
-      <SiteFooter air={air} onOpenAssistant={() => setAssistantOpen(true)} />
+      <SiteFooter
+        air={air}
+        locale={settings.locale}
+        onOpenAssistant={() => setAssistantOpen(true)}
+      />
 
       {air && advice && (
         <Assistant

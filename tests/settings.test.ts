@@ -3,7 +3,7 @@ import {
   DEFAULT_SETTINGS,
   loadSettings,
   localeDirection,
-  sanitiseSettings,
+  sanitizeSettings,
   saveSettings,
   SETTINGS_STORAGE_KEY,
 } from "@/lib/settings";
@@ -14,7 +14,7 @@ afterEach(() => {
 
 describe("app settings", () => {
   it("returns safe defaults for malformed values", () => {
-    const settings = sanitiseSettings({
+    const settings = sanitizeSettings({
       aqiStandard: "metric",
       locale: "fr",
       simpleMode: "yes",
@@ -28,7 +28,7 @@ describe("app settings", () => {
   });
 
   it("accepts valid preferences", () => {
-    const settings = sanitiseSettings({
+    const settings = sanitizeSettings({
       aqiStandard: "us",
       locale: "hi",
       simpleMode: true,

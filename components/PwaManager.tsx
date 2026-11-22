@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useClientValue, useIsOffline } from "@/hooks/useClientValue";
+import { translate } from "@/lib/i18n";
+import { readStorage, writeStorage } from "@/lib/storage";
 import { Icon } from "./Icon";
+import { usePreferences } from "./PreferencesProvider";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -30,14 +33,11 @@ function isStandalone() {
 }
 
 function readDismissed(): boolean {
-  try {
-    return window.localStorage.getItem(DISMISS_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return readStorage(DISMISS_KEY) === "1";
 }
 
 export function PwaManager() {
+  const { settings } = usePreferences();
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const offline = useIsOffline();
   const [updateReady, setUpdateReady] = useState(false);
@@ -100,11 +100,7 @@ export function PwaManager() {
   function dismiss() {
     setDismissed(true);
     setInstallEvent(null);
-    try {
-      window.localStorage.setItem(DISMISS_KEY, "1");
-    } catch {
-      // Nothing to persist; the strip stays hidden for this visit only.
-    }
+    writeStorage(DISMISS_KEY, "1");
   }
 
   const showInstall = !dismissed && (Boolean(installEvent) || iosHint);
@@ -138,7 +134,7 @@ export function PwaManager() {
           type="button"
           className="pwa-strip-dismiss"
           onClick={dismiss}
-          aria-label="Dismiss install prompt"
+          aria-label={translate(settings.locale, "pwa.dismiss")}
         >
           <Icon name="close" size={12} />
         </button>

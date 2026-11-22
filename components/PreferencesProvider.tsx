@@ -12,12 +12,13 @@ import {
 import { useClientValue } from "@/hooks/useClientValue";
 import {
   DEFAULT_SETTINGS,
-  sanitiseSettings,
+  sanitizeSettings,
   saveSettings,
   SETTINGS_STORAGE_KEY,
   type AlertPreferences,
   type AppSettings,
 } from "@/lib/settings";
+import { parseStoredJson, readStorage } from "@/lib/storage";
 import type { AqiStandard, Locale } from "@/lib/types";
 import { PwaManager } from "./PwaManager";
 
@@ -32,26 +33,13 @@ interface PreferencesContextValue {
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
 
-function readRawSettings(): string | null {
-  try {
-    return window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
 function parseRawSettings(raw: string | null): AppSettings {
-  if (!raw) return DEFAULT_SETTINGS;
-  try {
-    return sanitiseSettings(JSON.parse(raw));
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
+  return parseStoredJson(raw, (value) => sanitizeSettings(value), DEFAULT_SETTINGS);
 }
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const hydrated = useClientValue(() => true, false);
-  const rawStored = useClientValue(readRawSettings, null);
+  const rawStored = useClientValue(() => readStorage(SETTINGS_STORAGE_KEY), null);
   const storedSettings = useMemo(() => parseRawSettings(rawStored), [rawStored]);
   const [override, setOverride] = useState<AppSettings | null>(null);
   const settings = override ?? storedSettings;

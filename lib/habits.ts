@@ -1,3 +1,5 @@
+import { readStoredJson, writeStoredJson } from "./storage";
+
 export interface HabitDay {
   actionIds: string[];
   completed: string[];
@@ -58,7 +60,7 @@ function stringArray(value: unknown, max = 40): string[] {
   ).slice(0, max);
 }
 
-export function sanitiseHabits(value: unknown): HabitState {
+export function sanitizeHabits(value: unknown): HabitState {
   const input = object(value);
   const rawDays = object(input.days);
   const days: Record<string, HabitDay> = {};
@@ -85,34 +87,24 @@ export function sanitiseHabits(value: unknown): HabitState {
 }
 
 export function loadHabits(): HabitState {
-  if (typeof window === "undefined") return emptyHabits();
-  try {
-    const raw = window.localStorage.getItem(HABITS_STORAGE_KEY);
-    if (!raw) return emptyHabits();
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (!parsed || parsed.version !== 1) return emptyHabits();
-    return sanitiseHabits(parsed);
-  } catch {
-    return emptyHabits();
-  }
+  return readStoredJson(
+    HABITS_STORAGE_KEY,
+    (value) => {
+      const parsed = value as Record<string, unknown> | null;
+      return parsed && parsed.version === 1 ? sanitizeHabits(parsed) : null;
+    },
+    emptyHabits(),
+  );
 }
 
 export function saveHabits(state: HabitState): void {
-  if (typeof window === "undefined") return;
-  try {
-    const keys = Object.keys(state.days).sort();
-    const trimmed = keys.length > HABITS_MAX_DAYS ? keys.slice(-HABITS_MAX_DAYS) : keys;
-    const days: Record<string, HabitDay> = {};
-    trimmed.forEach((key) => {
-      days[key] = state.days[key];
-    });
-    window.localStorage.setItem(
-      HABITS_STORAGE_KEY,
-      JSON.stringify({ version: 1, days }),
-    );
-  } catch {
-    // Storage can be unavailable in private mode; the session still works.
-  }
+  const keys = Object.keys(state.days).sort();
+  const trimmed = keys.length > HABITS_MAX_DAYS ? keys.slice(-HABITS_MAX_DAYS) : keys;
+  const days: Record<string, HabitDay> = {};
+  trimmed.forEach((key) => {
+    days[key] = state.days[key];
+  });
+  writeStoredJson(HABITS_STORAGE_KEY, { version: 1, days });
 }
 
 export function toggleHabit(

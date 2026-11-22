@@ -2,53 +2,50 @@
 
 import Link from "next/link";
 import { formatObservedAt } from "@/lib/format";
-import type { AirReading } from "@/lib/types";
+import { translate } from "@/lib/i18n";
+import type { AirReading, Locale } from "@/lib/types";
 import { Logo } from "../Logo";
 
 interface SiteFooterProps {
   air: AirReading | null;
+  locale: Locale;
   onOpenAssistant: () => void;
 }
 
-export function SiteFooter({ air, onOpenAssistant }: SiteFooterProps) {
+export function SiteFooter({ air, locale, onOpenAssistant }: SiteFooterProps) {
   return (
     <footer className="site-footer">
       <div className="footer-top">
         <div>
           <Logo />
-          <p className="footer-tagline">
-            Clearer choices for smoky seasons. Built for families, schools and the streets between
-            them.
-          </p>
+          <p className="footer-tagline">{translate(locale, "footer.tagline")}</p>
         </div>
-        <nav className="footer-nav" aria-label="Footer navigation">
-          <a href="#playbook">Today</a>
-          <a href="#choices">Choices lab</a>
-          <Link href="/dashboard">India dashboard</Link>
+        <nav className="footer-nav" aria-label={translate(locale, "footer.nav")}>
+          <a href="#playbook">{translate(locale, "footer.today")}</a>
+          <a href="#choices">{translate(locale, "footer.choices")}</a>
+          <Link href="/dashboard">{translate(locale, "footer.dashboard")}</Link>
           <button type="button" className="footer-nav-button" onClick={onOpenAssistant}>
-            Ask Saans
+            {translate(locale, "footer.ask")}
           </button>
-          <a href="#community">Community kit</a>
+          <a href="#community">{translate(locale, "footer.community")}</a>
         </nav>
         <div className="footer-source">
-          <span className="eyebrow">Data &amp; care</span>
+          <span className="eyebrow">{translate(locale, "footer.data")}</span>
+          <p>{translate(locale, "footer.airSource")}</p>
           <p>
-            Air quality from{" "}
-            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
-              Open-Meteo
-            </a>
-            , a free open-data service. AQI uses the US EPA scale.
-          </p>
-          <p>
-            {air ? `Reading: ${formatObservedAt(air.observedAt)}.` : "Live reading loading."} Saans
-            is not a medical device and does not provide diagnosis or treatment.
+            {air
+              ? translate(locale, "footer.reading", {
+                  time: formatObservedAt(air.observedAt),
+                })
+              : translate(locale, "footer.liveLoading")}{" "}
+            {translate(locale, "footer.notMedical")}
           </p>
         </div>
       </div>
       <div className="footer-bottom">
-        <span>saans means breath.</span>
-        <span>No accounts · no tracking · profile stays in your browser</span>
-        <span>Built with Next.js &amp; TypeScript</span>
+        <span>{translate(locale, "footer.saansMeans")}</span>
+        <span>{translate(locale, "footer.noAccount")}</span>
+        <span>{translate(locale, "footer.built")}</span>
       </div>
     </footer>
   );

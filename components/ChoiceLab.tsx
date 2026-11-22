@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { formatDecimal, formatInr, formatNumber } from "@/lib/format";
+import { translate } from "@/lib/i18n";
 import { measurementFor } from "@/lib/measurement";
-import type { Advice, AirReading, Profile } from "@/lib/types";
+import type { Advice, AirReading, Locale, Profile } from "@/lib/types";
 import { Icon } from "./Icon";
 import { usePreferences } from "./PreferencesProvider";
 
@@ -16,15 +17,17 @@ interface SimOption {
   cost: number;
 }
 
-function buildOptions(profile: Profile, advice: Advice): SimOption[] {
+function buildOptions(profile: Profile, advice: Advice, locale: Locale): SimOption[] {
   const options: SimOption[] = [];
   const transit = advice.swaps.find((swap) => swap.id === "one-transit-day");
+  const t = (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) =>
+    translate(locale, key, values);
 
   if (profile.mobility.primary === "car" || profile.mobility.primary === "two-wheeler") {
     options.push({
       id: "transit",
-      label: "One transit day a week",
-      description: "Leave the private vehicle at home for the cleanest commute day.",
+      label: t("choices.transit.label"),
+      description: t("choices.transit.description"),
       exposure: 5,
       co2e: transit?.co2eKgMonth ?? 6,
       cost: transit ? transit.co2eKgMonth * 22 : 150,
@@ -34,8 +37,8 @@ function buildOptions(profile: Profile, advice: Advice): SimOption[] {
   if (profile.home.indoorSmoke !== "none") {
     options.push({
       id: "no-burn",
-      label: "Stop indoor burning",
-      description: "No incense, coils, candles or solid fuel inside the home.",
+      label: t("choices.noBurn.label"),
+      description: t("choices.noBurn.description"),
       exposure: 10,
       co2e: 0.6,
       cost: 0,
@@ -45,8 +48,8 @@ function buildOptions(profile: Profile, advice: Advice): SimOption[] {
   if (profile.home.purifier === "none") {
     options.push({
       id: "clean-room",
-      label: "Filter one bedroom",
-      description: "A sealed room with a correctly sized HEPA purifier overnight.",
+      label: t("choices.cleanRoom.label"),
+      description: t("choices.cleanRoom.description"),
       exposure: 18,
       co2e: 8,
       cost: -380,
@@ -55,8 +58,8 @@ function buildOptions(profile: Profile, advice: Advice): SimOption[] {
 
   options.push({
     id: "clean-window",
-    label: "Move outdoor time to the cleaner window",
-    description: `Shift a walk, play session or errand to ${advice.windows.best.label}.`,
+    label: t("choices.cleanWindow.label"),
+    description: t("choices.cleanWindow.description", { window: advice.windows.best.label }),
     exposure: 7,
     co2e: 0,
     cost: 0,
@@ -64,8 +67,8 @@ function buildOptions(profile: Profile, advice: Advice): SimOption[] {
 
   options.push({
     id: "pressure-cooker",
-    label: "Pressure-cook one meal a day",
-    description: "Use a lid and pressure cooker to cut cooking energy and moisture.",
+    label: t("choices.pressureCooker.label"),
+    description: t("choices.pressureCooker.description"),
     exposure: 3,
     co2e: 3,
     cost: 90,
@@ -111,8 +114,9 @@ export function ChoiceLab({
   advice: Advice;
 }) {
   const { settings } = usePreferences();
+  const locale = settings.locale;
   const measurement = measurementFor(settings.aqiStandard, air);
-  const options = useMemo(() => buildOptions(profile, advice), [profile, advice]);
+  const options = useMemo(() => buildOptions(profile, advice, locale), [profile, advice, locale]);
   const [selected, setSelected] = useState<string[]>([]);
 
   const totals = options
@@ -141,26 +145,23 @@ export function ChoiceLab({
     <section id="choices" className="section choices-section" aria-labelledby="choices-title">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">The choices lab</span>
-          <h2 id="choices-title">Change one thing. See the difference.</h2>
+          <span className="eyebrow">{translate(locale, "choices.eyebrow")}</span>
+          <h2 id="choices-title">{translate(locale, "choices.title")}</h2>
         </div>
-        <p className="section-intro">
-          Toggle realistic swaps for your household. The comparison updates instantly — no
-          sign-up, no guesswork.
-        </p>
+        <p className="section-intro">{translate(locale, "choices.intro")}</p>
       </div>
 
       <div className="lab-layout">
-        <div className="lab-options" role="group" aria-label="Choose changes to compare">
+        <div
+          className="lab-options"
+          role="group"
+          aria-label={translate(locale, "choices.group")}
+        >
           {options.map((option) => {
             const checked = selected.includes(option.id);
             return (
               <label key={option.id} className={`lab-option ${checked ? "is-checked" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggle(option.id)}
-                />
+                <input type="checkbox" checked={checked} onChange={() => toggle(option.id)} />
                 <span className="lab-check" aria-hidden="true">
                   {checked ? <Icon name="check" size={15} /> : null}
                 </span>
@@ -168,10 +169,20 @@ export function ChoiceLab({
                   <strong>{option.label}</strong>
                   <small>{option.description}</small>
                   <span className="lab-option-impact">
-                    {option.exposure > 0 && `≈${option.exposure}% exposure cut`}
-                    {option.co2e > 0 && ` · ${formatDecimal(option.co2e)} kg CO₂e/mo`}
-                    {option.cost > 0 && ` · ${formatInr(option.cost)} saved`}
-                    {option.cost < 0 && ` · ${formatInr(option.cost)}/mo`}
+                    {option.exposure > 0 &&
+                      translate(locale, "choices.impactExposure", { pct: option.exposure })}
+                    {option.co2e > 0 &&
+                      ` · ${translate(locale, "choices.impactCo2e", {
+                        value: formatDecimal(option.co2e),
+                      })}`}
+                    {option.cost > 0 &&
+                      ` · ${translate(locale, "choices.impactSaved", {
+                        amount: formatInr(option.cost),
+                      })}`}
+                    {option.cost < 0 &&
+                      ` · ${translate(locale, "choices.impactCost", {
+                        amount: formatInr(option.cost),
+                      })}`}
                   </span>
                 </span>
               </label>
@@ -179,14 +190,14 @@ export function ChoiceLab({
           })}
           {selected.length > 0 && (
             <button type="button" className="reset-button" onClick={() => setSelected([])}>
-              Reset comparison
+              {translate(locale, "choices.reset")}
             </button>
           )}
         </div>
 
         <div className="lab-result" aria-live="polite">
           <div className="lab-result-top">
-            <span className="eyebrow eyebrow--light">Modelled difference</span>
+            <span className="eyebrow eyebrow--light">{translate(locale, "choices.result")}</span>
             <span className="lab-city">
               {profile.city.name} · {measurement.scaleLabel} {formatNumber(measurement.value)}
             </span>
@@ -196,55 +207,56 @@ export function ChoiceLab({
               <span className="lab-empty-mark" aria-hidden="true">
                 <Icon name="spark" size={28} />
               </span>
-              <h3>Your experiment starts here.</h3>
-              <p>Select one or two changes to see the modelled effect on exposure, carbon and cost.</p>
+              <h3>{translate(locale, "choices.emptyTitle")}</h3>
+              <p>{translate(locale, "choices.emptyBody")}</p>
               <span className="lab-hint">
-                Today&apos;s full plan already models a {advice.ledger.exposurePct}% exposure
-                reduction.
+                {translate(locale, "choices.emptyHint", { pct: advice.ledger.exposurePct })}
               </span>
             </div>
           ) : (
             <>
               <div className="lab-big-number">
                 <strong>{exposure}%</strong>
-                <span>less daily PM2.5 exposure from these changes</span>
+                <span>{translate(locale, "choices.exposureResult")}</span>
               </div>
               <div className="sim-meters">
                 <Meter
-                  label="Exposure"
+                  label={translate(locale, "choices.exposure")}
                   value={exposure}
                   max={48}
-                  display={`≈${exposure}% lower`}
+                  display={translate(locale, "choices.lower", { value: exposure })}
                   tone="lime"
                 />
                 <Meter
-                  label="Carbon"
+                  label={translate(locale, "choices.carbon")}
                   value={co2e}
                   max={36}
-                  display={`${formatDecimal(co2e)} kg/mo`}
+                  display={translate(locale, "choices.perMonth", { value: formatDecimal(co2e) })}
                   tone="sky"
                 />
                 <Meter
-                  label="Money"
+                  label={translate(locale, "choices.money")}
                   value={Math.abs(cost)}
                   max={600}
-                  display={cost >= 0 ? `${formatInr(cost)} saved/mo` : `${formatInr(cost)} cost/mo`}
+                  display={
+                    cost >= 0
+                      ? translate(locale, "choices.savedPerMonth", {
+                          amount: formatInr(cost),
+                        })
+                      : translate(locale, "choices.costPerMonth", {
+                          amount: formatInr(cost),
+                        })
+                  }
                   tone="cream"
                 />
               </div>
               <div className="lab-equivalent">
                 <Icon name="leaf" size={18} />
-                <p>
-                  The carbon saved over a year is roughly {formatNumber(carKm)} km of average car
-                  driving avoided.
-                </p>
+                <p>{translate(locale, "choices.equivalent", { km: formatNumber(carKm) })}</p>
               </div>
             </>
           )}
-          <p className="lab-disclaimer">
-            Directional modelling only — not a measured health outcome. Estimates use typical
-            Indian fuel and appliance assumptions.
-          </p>
+          <p className="lab-disclaimer">{translate(locale, "choices.disclaimer")}</p>
         </div>
       </div>
     </section>

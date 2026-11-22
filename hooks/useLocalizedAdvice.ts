@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { fetchJson } from "@/lib/client-fetch";
+import { CLIENT_TIMEOUT_MS } from "@/lib/constants";
 import { buildAdvice } from "@/lib/engine";
 import { applyAdviceTranslations, collectAdviceStrings } from "@/lib/localize-advice";
 import type { Advice, AirReading, AqiStandard, Locale, Profile } from "@/lib/types";
@@ -28,16 +30,12 @@ export function useLocalizedAdvice(
 
     let cancelled = false;
     const texts = collectAdviceStrings(baseAdvice);
-    fetch("/api/translate", {
+    fetchJson<{ translations?: string[] }>("/api/translate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ texts, target: "hi" }),
-      signal: AbortSignal.timeout(20_000),
+      timeoutMs: CLIENT_TIMEOUT_MS.translate,
     })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return (await response.json()) as { translations?: string[] };
-      })
       .then((data) => {
         if (cancelled) return;
         if (Array.isArray(data?.translations) && data.translations.length === texts.length) {

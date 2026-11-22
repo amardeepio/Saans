@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchJson, isAbortError } from "@/lib/client-fetch";
+import { CLIENT_TIMEOUT_MS } from "@/lib/constants";
 import { CITIES } from "@/lib/cities";
 import { isIndianCity } from "@/lib/india";
 import type { City } from "@/lib/types";
@@ -43,12 +45,10 @@ export function useCitySearch(options: UseCitySearchOptions = {}) {
       setSearchNote("");
       try {
         const suffix = indiaOnly ? "&country=IN" : "";
-        const response = await fetch(
+        const data = await fetchJson<{ results?: City[] }>(
           `/api/geocode?q=${encodeURIComponent(trimmed)}${suffix}`,
-          { signal: controller.signal },
+          { signal: controller.signal, timeoutMs: CLIENT_TIMEOUT_MS.geocode },
         );
-        if (!response.ok) throw new Error("geocode");
-        const data = (await response.json()) as { results?: City[] };
         const items = data.results ?? [];
         setResults(items);
         setSearchNote(
@@ -59,7 +59,7 @@ export function useCitySearch(options: UseCitySearchOptions = {}) {
             : "",
         );
       } catch (error) {
-        if ((error as Error).name === "AbortError") return;
+        if (isAbortError(error)) return;
         const needle = trimmed.toLowerCase();
         const fallback = CITIES.filter((city) => {
           if (indiaOnly && !isIndianCity(city)) return false;

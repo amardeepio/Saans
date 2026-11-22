@@ -9,7 +9,7 @@
   <a href="https://github.com/amardeepio/Saans/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/amardeepio/Saans/actions/workflows/ci.yml/badge.svg?branch=main" /></a>
   <img alt="TypeScript 5.9" src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white" />
   <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white" />
-  <img alt="111 tests passing" src="https://img.shields.io/badge/tests-111%20passing-2f7d57?style=flat-square&logo=vitest&logoColor=white" />
+  <img alt="145 tests passing" src="https://img.shields.io/badge/tests-145%20passing-2f7d57?style=flat-square&logo=vitest&logoColor=white" />
   <img alt="Code coverage 92.6 percent" src="https://img.shields.io/badge/coverage-92.6%25-2f7d57?style=flat-square&logo=vitest&logoColor=white" />
   <img alt="Axe accessibility: 0 violations" src="https://img.shields.io/badge/accessibility-axe%200%20violations-143c31?style=flat-square" />
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-d9f36a?style=flat-square" />
@@ -64,7 +64,7 @@ The experience is a location-aware dashboard and a grounded AI chat assistant th
 | Signal | Result |
 | --- | --- |
 | **Language** | TypeScript strict mode, zero type errors |
-| **Tests** | 111 tests across 25 files |
+| **Tests** | 145 tests across 31 files |
 | **Line coverage** | **92.56%** |
 | **Statement coverage** | 88.36% |
 | **Function coverage** | 92.73% |
@@ -281,7 +281,12 @@ components/
   ListenButton.tsx           Read-aloud control
   CityPulse.tsx              Five-metro AQI and °C strip below the header
   CityDetailDialog.tsx       Accessible city AQI + weather + pollutant report
+  city/CityFacts.tsx         Shared AQI badge, weather facts and pollutant note
   DashboardApp.tsx           India ranking + India-only search
+  dashboard/CityRankingList.tsx  Ranked cities and source status
+  dashboard/CityDetailPanel.tsx  Selected-city panel on the dashboard
+  assistant/ChatLog.tsx      Message log, thinking state and read-aloud
+  setup/                     Three setup steps and shared form controls
   PollutantGrid.tsx          Six-card pollutant watch with NAQI sub-indices
   WeatherGlyph.tsx           WMO weather-code icons
   Playbook.tsx               Timeline, risk, windows, habit and impact ledger
@@ -296,10 +301,16 @@ lib/
   dispersion.ts              Dispersion score and ventilation window
   air.ts                     Open-Meteo fetch, hourly weather and fallback
   engine.ts                  Household decision engine
-  assistant.ts               Intent-aware local assistant
+  answers.ts                 Topic-aware local assistant answers
+  assistant.ts               Assistant suggestions and tone helpers
   ai.ts                      Optional GenAI + output safety guard
   translate.ts               Server-only optional translation
   localize-advice.ts         Translate/merge the generated plan
+  client-fetch.ts            Timed, abortable JSON fetch for client screens
+  storage.ts                 Fail-safe localStorage reads and writes
+  constants.ts               Shared request budgets and input limits
+  source.ts                  Live / partly-live / sample source wording
+  city-param.ts              Shareable dashboard city parameter
   habits.ts                  Local habit history, streaks and weekly review
   alerts.ts                  Alert rules, dedupe and notifications
   calendar.ts                Clean-window .ics export
@@ -313,8 +324,29 @@ lib/
   india.ts                   India-only filtering and tracked-city universe
   validation.ts              Input clamping and local-storage schema
   rate-limit.ts              Small in-memory limiter
-tests/                       111 unit tests across 25 files
+hooks/
+  useAirReading.ts           Live reading with cache + sample fallback
+  useCitySearch.ts           Debounced geocoding with offline fallback
+  useIndiaRanking.ts         Ranking fetch with an offline sample ranking
+  useLocalizedAdvice.ts      Optional Hindi plan translation
+  useStoredProfile.ts        Profile hydration and persistence
+  useAssistantChat.ts        Chat state, streaming and local fallback
+  useClientValue.ts          Hydration-safe client-only values
+  useDialogFocus.ts          Dialog focus trap helpers
+tests/                       145 unit tests across 31 files
 ```
+
+### Code conventions
+
+- Client requests go through `lib/client-fetch.ts`, so timeouts and abort
+  handling are identical on every screen.
+- Anything touching `localStorage` goes through `lib/storage.ts`; a blocked
+  store returns a fallback instead of throwing.
+- UI copy lives in `lib/locales/en.ts` and `lib/locales/hi.ts`. The Hindi
+  dictionary is typed against the English keys, so a missing translation fails
+  typecheck rather than silently falling back.
+- ESLint enforces `max-lines`, cyclomatic `complexity`, nesting depth and
+  `no-console`, so new screens cannot quietly become monoliths.
 
 ---
 
@@ -423,7 +455,7 @@ The suite covers:
 - Number, currency and time formatting, including date/time fallbacks
 - Rate-limit windows and proxy key derivation
 
-**111 tests across 25 files.** Run:
+**145 tests across 31 files.** Run:
 
 ```bash
 npm test

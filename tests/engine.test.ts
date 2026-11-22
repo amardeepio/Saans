@@ -54,7 +54,7 @@ describe("advice engine", () => {
     expect(advice.actions.some((action) => action.id === "school-shield")).toBe(false);
   });
 
-  it("prioritises solid-fuel smoke in a biomass household", () => {
+  it("prioritizes solid-fuel smoke in a biomass household", () => {
     const p = profile({
       home: { ...DEFAULT_PROFILE.home, cookingFuel: "biomass", indoorSmoke: "wood" },
     });

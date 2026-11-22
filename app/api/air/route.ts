@@ -1,7 +1,7 @@
 import { getAirReading } from "@/lib/air";
 import { rateLimitResponse } from "@/lib/http";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
-import { sanitiseCity } from "@/lib/validation";
+import { sanitizeCity } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
@@ -25,7 +25,7 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ error: "Location is required." }, { status: 400 });
   }
 
-  const city = sanitiseCity({
+  const city = sanitizeCity({
     id: url.searchParams.get("id") ?? "custom",
     name: name || "Your neighbourhood",
     region: region || undefined,

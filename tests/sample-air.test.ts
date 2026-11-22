@@ -4,7 +4,7 @@ import {
   hourLabelFromIso,
   isSameAqiBand,
   nextHours,
-  normaliseAqi,
+  normalizeAqi,
   ringRange,
   sampleReading,
 } from "@/lib/sample-air";
@@ -28,11 +28,11 @@ describe("sample air and display helpers", () => {
     expect(nextHours(reading.hourly).length).toBe(24);
   });
 
-  it("formats hours and normalises reported AQI", () => {
+  it("formats hours and normalizes reported AQI", () => {
     expect(hourLabelFromIso("2026-11-20T14:00")).toBe("2 PM");
     expect(hourLabelFromIso("nonsense")).toBe("—");
-    expect(normaliseAqi(40, 123)).toBe(123);
-    expect(normaliseAqi(40)).toBeGreaterThan(0);
+    expect(normalizeAqi(40, 123)).toBe(123);
+    expect(normalizeAqi(40)).toBeGreaterThan(0);
   });
 
   it("compares bands and ring ranges", () => {

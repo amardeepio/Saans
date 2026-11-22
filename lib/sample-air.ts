@@ -127,7 +127,7 @@ export function isSameAqiBand(aqi: number, other: number): boolean {
   return aqiCategory(aqi).category === aqiCategory(other).category;
 }
 
-export function normaliseAqi(pm25: number, reported?: number | null): number {
+export function normalizeAqi(pm25: number, reported?: number | null): number {
   if (typeof reported === "number" && Number.isFinite(reported) && reported > 0) {
     return Math.round(reported);
   }

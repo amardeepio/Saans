@@ -115,7 +115,7 @@ export function buildAdvice(
   const cost = selected.reduce((sum, action) => sum + action.impact.costInrMonth, 0);
   const sensitiveText = hasSensitive
     ? ` Your plan gives extra weight to ${sensitive.join(", ")}.`
-    : " Your plan prioritises low-effort changes that most households can keep.";
+    : " Your plan prioritizes low-effort changes that most households can keep.";
   const commuteLabel =
     profile.mobility.primary === "car"
       ? "a car commute"

@@ -1,5 +1,5 @@
 import { askGenAi, cleanAnswerText, containsUnsafeAdvice, isGenAiConfigured, streamGenAi } from "@/lib/ai";
-import { buildLocalAnswer } from "@/lib/assistant";
+import { buildLocalAnswer } from "@/lib/answers";
 import { buildAdvice } from "@/lib/engine";
 import { isSameOrigin, rateLimitResponse, readBoundedJson } from "@/lib/http";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
@@ -7,9 +7,9 @@ import { sampleReading } from "@/lib/sample-air";
 import { translateTexts } from "@/lib/translate";
 import type { ChatStreamEvent } from "@/lib/types";
 import {
-  sanitiseAirReading,
-  sanitiseChatText,
-  sanitiseProfile,
+  sanitizeAirReading,
+  sanitizeChatText,
+  sanitizeProfile,
 } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -44,7 +44,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!parsed.ok) return parsed.response;
   const body = parsed.data;
 
-  const message = sanitiseChatText(body.message);
+  const message = sanitizeChatText(body.message);
   if (!message) {
     return Response.json(
       { error: "Ask a question between 1 and 600 characters." },
@@ -52,8 +52,8 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const profile = sanitiseProfile(body.profile);
-  const air = sanitiseAirReading(body.air, profile) ?? sampleReading(profile.city);
+  const profile = sanitizeProfile(body.profile);
+  const air = sanitizeAirReading(body.air, profile) ?? sampleReading(profile.city);
   const standard = body.standard === "us" ? "us" : "naqi";
   const locale = body.locale === "hi" ? "hi" : "en";
   const advice = buildAdvice(profile, air, standard);
@@ -66,7 +66,7 @@ export async function POST(request: Request): Promise<Response> {
       if (!item || typeof item !== "object") return null;
       const record = item as Record<string, unknown>;
       const role = record.role === "assistant" ? "assistant" : record.role === "user" ? "user" : null;
-      const content = sanitiseChatText(record.content);
+      const content = sanitizeChatText(record.content);
       if (!role || !content) return null;
       return { role, content: content.slice(0, 400) };
     })

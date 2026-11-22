@@ -7,24 +7,24 @@ import { Icon } from "../Icon";
 
 interface ImpactRibbonProps {
   advice: Advice | null;
-  personalised: boolean;
+  personalized: boolean;
   locale: Locale;
   onOpenSetup: () => void;
 }
 
 export function ImpactRibbon({
   advice,
-  personalised,
+  personalized,
   locale,
   onOpenSetup,
 }: ImpactRibbonProps) {
   return (
     <>
-      <section className="impact-ribbon" aria-label="Today's headline estimates">
+      <section className="impact-ribbon" aria-label={translate(locale, "impactRibbon.label")}>
         <div className="ribbon-intro">
           <span className="eyebrow">{translate(locale, "ribbon.title")}</span>
           <p>
-            {personalised
+            {personalized
               ? translate(locale, "ribbon.tuned")
               : translate(locale, "ribbon.demo")}
           </p>
@@ -75,13 +75,13 @@ export function ImpactRibbon({
           type="button"
           className="ribbon-edit"
           onClick={onOpenSetup}
-          aria-label="Edit household profile"
+          aria-label={translate(locale, "impactRibbon.editProfile")}
         >
           <Icon name="arrow-right" size={18} />
         </button>
       </section>
 
-      {!personalised && (
+      {!personalized && (
         <div className="demo-banner" role="note">
           <div>
             <span className="demo-dot" aria-hidden="true" />

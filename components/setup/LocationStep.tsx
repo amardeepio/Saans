@@ -1,13 +1,15 @@
 "use client";
 
 import type { RefObject } from "react";
-import type { City, Profile } from "@/lib/types";
+import { translate } from "@/lib/i18n";
+import type { City, Locale, Profile } from "@/lib/types";
 import { Icon } from "../Icon";
 import { Stepper } from "./FormControls";
 
 interface LocationStepProps {
   headingRef: RefObject<HTMLHeadingElement | null>;
   draft: Profile;
+  locale: Locale;
   query: string;
   onQueryChange: (value: string) => void;
   results: City[];
@@ -23,6 +25,7 @@ interface LocationStepProps {
 export function LocationStep({
   headingRef,
   draft,
+  locale,
   query,
   onQueryChange,
   results,
@@ -42,16 +45,13 @@ export function LocationStep({
         <Icon name="pin" size={25} />
       </span>
       <h2 id="setup-title" ref={headingRef} tabIndex={-1}>
-        Where does your household breathe?
+        {translate(locale, "setup.cityTitle")}
       </h2>
-      <p className="setup-lede">
-        Location sets today&apos;s air. Your household shape tells Saans who needs the most
-        protection.
-      </p>
+      <p className="setup-lede">{translate(locale, "setup.cityLede")}</p>
 
       <div className="field-block">
         <label className="field-label" htmlFor="city-search">
-          City or district
+          {translate(locale, "setup.cityLabel")}
         </label>
         <div className="city-search">
           <Icon name="search" size={18} />
@@ -59,7 +59,7 @@ export function LocationStep({
             id="city-search"
             type="search"
             autoComplete="off"
-            placeholder="Search Delhi, Mumbai, Patna…"
+            placeholder={translate(locale, "setup.cityPlaceholder")}
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             aria-describedby="city-search-note"
@@ -67,10 +67,10 @@ export function LocationStep({
           {searching && <span className="search-spinner" aria-hidden="true" />}
         </div>
         <p id="city-search-note" className="field-hint" aria-live="polite">
-          {searchNote || `Selected: ${selectedCityLabel}`}
+          {searchNote || `${translate(locale, "setup.selected")}: ${selectedCityLabel}`}
         </p>
 
-        <div className="city-results" aria-label="City results">
+        <div className="city-results" aria-label={translate(locale, "setup.cityResults")}>
           {results.map((city) => (
             <button
               key={`${city.id}-${city.name}`}
@@ -95,38 +95,41 @@ export function LocationStep({
           disabled={locating}
         >
           <Icon name="locate" size={17} />
-          {locating ? "Finding your location…" : "Use my current location"}
+          {locating
+            ? translate(locale, "setup.locating")
+            : translate(locale, "setup.useLocation")}
         </button>
-        <p className="privacy-note">
-          Coordinates are used only to fetch air quality. Saans stores nothing on a server.
-        </p>
+        <p className="privacy-note">{translate(locale, "setup.privacy")}</p>
       </div>
 
       <div className="field-block">
-        <span className="field-label">Who lives at home?</span>
+        <span className="field-label">{translate(locale, "setup.whoLives")}</span>
         <div className="stepper-grid">
           <Stepper
-            label="Adults"
+            label={translate(locale, "setup.adults")}
+            locale={locale}
             value={draft.household.adults}
             min={1}
             max={12}
             onChange={(value) => onUpdateHousehold("adults", value)}
           />
           <Stepper
-            label="Children"
+            label={translate(locale, "setup.children")}
+            locale={locale}
             value={draft.household.children}
             min={0}
             max={12}
             onChange={(value) => onUpdateHousehold("children", value)}
-            hint="Under 18"
+            hint={translate(locale, "setup.under18")}
           />
           <Stepper
-            label="Older adults"
+            label={translate(locale, "setup.elders")}
+            locale={locale}
             value={draft.household.elders}
             min={0}
             max={8}
             onChange={(value) => onUpdateHousehold("elders", value)}
-            hint="60+"
+            hint={translate(locale, "setup.over60")}
           />
         </div>
       </div>

@@ -31,7 +31,7 @@ export function formatObservedAt(value: string): string {
   }).format(date);
 }
 
-export function pluralise(count: number, singular: string, plural?: string): string {
+export function pluralize(count: number, singular: string, plural?: string): string {
   const fallbackPlural = /[^aeiou]y$/i.test(singular)
     ? `${singular.slice(0, -1)}ies`
     : `${singular}s`;

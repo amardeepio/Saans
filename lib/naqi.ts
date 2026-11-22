@@ -99,12 +99,12 @@ function clamp(value: number, min: number, max: number): number {
 export function pollutantSubIndex(key: PollutantKey, concentration: number): number {
   const scale = NAQI_SCALES[key];
   if (!Number.isFinite(concentration) || concentration <= 0) return 0;
-  const normalised = key === "co" ? concentration / 1000 : concentration;
+  const normalized = key === "co" ? concentration / 1000 : concentration;
 
   for (const bp of BREAKPOINTS[key]) {
-    if (normalised <= bp.high) {
+    if (normalized <= bp.high) {
       const span = bp.high - bp.low;
-      const ratio = span <= 0 ? 0 : clamp((normalised - bp.low) / span, 0, 1);
+      const ratio = span <= 0 ? 0 : clamp((normalized - bp.low) / span, 0, 1);
       return Math.round(bp.iLow + ratio * (bp.iHigh - bp.iLow));
     }
   }
@@ -285,7 +285,7 @@ const GRAP_STAGES: Array<{
     actions: [
       "Stop open burning and restrict coal or diesel generator use.",
       "Increase public transport and parking fees in hot spots.",
-      "Step up dust control and mechanised sweeping.",
+      "Step up dust control and mechanized sweeping.",
     ],
   },
   {

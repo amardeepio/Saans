@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { buildCityQuery } from "@/lib/cities";
+import { fetchJson, isAbortError } from "@/lib/client-fetch";
+import { CLIENT_TIMEOUT_MS } from "@/lib/constants";
 import { cacheReading, getCachedReading } from "@/lib/offline";
 import { sampleReading } from "@/lib/sample-air";
 import type { AirReading, Profile } from "@/lib/types";
-import { sanitiseAirReading } from "@/lib/validation";
+import { sanitizeAirReading } from "@/lib/validation";
 
 interface ReadingState {
   cityId: string;
@@ -29,31 +31,25 @@ export function useAirReading(profile: Profile, enabled: boolean) {
     requestRef.current = controller;
     const city = profile.city;
 
-    const signal = AbortSignal.any([
-      controller.signal,
-      AbortSignal.timeout(12_000),
-    ]);
-
-    fetch(`/api/air?${buildCityQuery(city)}`, { signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("air");
-        const reading = sanitiseAirReading(await response.json(), profileRef.current);
+    fetchJson(`/api/air?${buildCityQuery(city)}`, {
+      signal: controller.signal,
+      timeoutMs: CLIENT_TIMEOUT_MS.air,
+    })
+      .then((payload) => {
+        const reading = sanitizeAirReading(payload, profileRef.current);
         if (!reading) throw new Error("air-format");
-        return reading;
-      })
-      .then((reading) => {
         if (controller.signal.aborted) return;
         setState({ cityId: city.id, air: reading, usedCached: false });
         cacheReading(reading);
       })
       .catch((error) => {
-        if ((error as Error).name === "AbortError") return;
+        if (isAbortError(error)) return;
         const cached = getCachedReading(city.id);
-        if (cached) {
-          setState({ cityId: city.id, air: cached, usedCached: true });
-        } else {
-          setState({ cityId: city.id, air: sampleReading(city), usedCached: false });
-        }
+        setState({
+          cityId: city.id,
+          air: cached ?? sampleReading(city),
+          usedCached: Boolean(cached),
+        });
       });
 
     return () => controller.abort();

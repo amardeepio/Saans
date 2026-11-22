@@ -4,10 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useCitySearch } from "@/hooks/useCitySearch";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { CITIES } from "@/lib/cities";
+import { translate } from "@/lib/i18n";
 import { isIndianCity } from "@/lib/india";
 import type { City, Priority, Profile } from "@/lib/types";
-import { sanitiseProfile } from "@/lib/validation";
+import { sanitizeProfile } from "@/lib/validation";
 import { Icon } from "./Icon";
+import { usePreferences } from "./PreferencesProvider";
 import { IndoorStep } from "./setup/IndoorStep";
 import { LocationStep } from "./setup/LocationStep";
 import { RoutineStep } from "./setup/RoutineStep";
@@ -27,6 +29,8 @@ function cloneProfile(profile: Profile): Profile {
 }
 
 export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps) {
+  const { settings } = usePreferences();
+  const locale = settings.locale;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [step, setStep] = useState(1);
@@ -77,7 +81,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
 
   function useLocation() {
     if (!navigator.geolocation) {
-      setSearchNote("Location is not available in this browser. Search for your city instead.");
+      setSearchNote(translate(locale, "setup.locationUnavailable"));
       return;
     }
     setLocating(true);
@@ -86,8 +90,8 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
       (position) => {
         chooseCity({
           id: "my-location",
-          name: "My neighbourhood",
-          country: "Current location",
+          name: translate(locale, "setup.myNeighbourhood"),
+          country: translate(locale, "setup.currentLocation"),
           latitude: Math.round(position.coords.latitude * 10000) / 10000,
           longitude: Math.round(position.coords.longitude * 10000) / 10000,
         });
@@ -95,7 +99,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
       },
       () => {
         setLocating(false);
-        setSearchNote("Location permission was not given. Search for your city instead.");
+        setSearchNote(translate(locale, "setup.locationDenied"));
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 },
     );
@@ -133,9 +137,9 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
       return;
     }
     onSave(
-      sanitiseProfile({
+      sanitizeProfile({
         ...draft,
-        displayName: draft.displayName.trim() || "Your household",
+        displayName: draft.displayName.trim() || translate(locale, "setup.defaultName"),
         updatedAt: new Date().toISOString(),
       }),
     );
@@ -158,10 +162,17 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
       <div className="setup-shell" onClick={(event) => event.stopPropagation()}>
         <div className="setup-top">
           <div>
-            <span className="eyebrow">Your household</span>
-            <p className="setup-step-count">Step {step} of 3</p>
+            <span className="eyebrow">{translate(locale, "setup.eyebrow")}</span>
+            <p className="setup-step-count">
+              {translate(locale, "setup.step")} {step} {translate(locale, "setup.of")} 3
+            </p>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close setup">
+          <button
+            type="button"
+            className="icon-button"
+            onClick={onClose}
+            aria-label={translate(locale, "setup.close")}
+          >
             <Icon name="close" size={19} />
           </button>
         </div>
@@ -178,6 +189,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
               <LocationStep
                 headingRef={headingRef}
                 draft={draft}
+                locale={locale}
                 query={query}
                 onQueryChange={setQuery}
                 results={displayedResults}
@@ -194,6 +206,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
               <IndoorStep
                 headingRef={headingRef}
                 draft={draft}
+                locale={locale}
                 onUpdateHousehold={updateHousehold}
                 onUpdateHome={updateHome}
               />
@@ -202,6 +215,7 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
               <RoutineStep
                 headingRef={headingRef}
                 draft={draft}
+                locale={locale}
                 onUpdateMobility={updateMobility}
                 onUpdateBudget={(budget) => setDraft((current) => ({ ...current, budget }))}
                 onTogglePriority={togglePriority}
@@ -216,13 +230,13 @@ export function SetupDialog({ open, profile, onClose, onSave }: SetupDialogProps
                 className="button button--quiet"
                 onClick={() => setStep(step - 1)}
               >
-                Back
+                {translate(locale, "setup.back")}
               </button>
             ) : (
               <span />
             )}
             <button type="submit" className="button button--dark">
-              {step < 3 ? "Continue" : "Build my plan"}
+              {translate(locale, step < 3 ? "setup.continue" : "setup.build")}
               <Icon name={step < 3 ? "arrow-right" : "spark"} size={17} />
             </button>
           </div>

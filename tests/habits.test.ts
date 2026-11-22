@@ -7,7 +7,7 @@ import {
   habitStreak,
   loadHabits,
   localDateKey,
-  sanitiseHabits,
+  sanitizeHabits,
   saveHabits,
   toggleHabit,
   weekTotals,
@@ -61,8 +61,8 @@ describe("habit tracking", () => {
     expect(weekTotals(week).best).not.toBeNull();
   });
 
-  it("sanitises malformed stored data", () => {
-    const state = sanitiseHabits({
+  it("sanitizes malformed stored data", () => {
+    const state = sanitizeHabits({
       version: 1,
       days: {
         "2026-11-20": { actionIds: ["a", "a", 3], completed: ["a", "x"], total: 4 },

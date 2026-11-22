@@ -2,7 +2,7 @@ import { CITIES } from "@/lib/cities";
 import { rateLimitResponse } from "@/lib/http";
 import { isIndianCity, isIndianGeocodeResult } from "@/lib/india";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
-import { sanitiseCity } from "@/lib/validation";
+import { sanitizeCity } from "@/lib/validation";
 import type { City } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -62,7 +62,7 @@ async function remoteMatches(query: string, indiaOnly: boolean): Promise<City[]>
         );
       })
       .map((result) =>
-        sanitiseCity({
+        sanitizeCity({
           id: `geo-${result.id ?? `${result.latitude}-${result.longitude}`}`,
           name: result.name,
           region: result.admin1,

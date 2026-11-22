@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { translate } from "@/lib/i18n";
+import type { Locale } from "@/lib/types";
 import { Icon } from "../Icon";
 
 export function Stepper({
@@ -10,6 +12,7 @@ export function Stepper({
   max,
   onChange,
   hint,
+  locale,
 }: {
   label: string;
   value: number;
@@ -17,6 +20,7 @@ export function Stepper({
   max: number;
   onChange: (value: number) => void;
   hint?: string;
+  locale: Locale;
 }) {
   return (
     <div className="stepper-field">
@@ -30,11 +34,15 @@ export function Stepper({
           className="stepper-button"
           onClick={() => onChange(Math.max(min, value - 1))}
           disabled={value <= min}
-          aria-label={`Remove one ${label.toLowerCase()}`}
+          aria-label={translate(locale, "stepper.remove", { label })}
         >
           −
         </button>
-        <output aria-live="polite" className="stepper-value" aria-label={`${label}: ${value}`}>
+        <output
+          aria-live="polite"
+          className="stepper-value"
+          aria-label={translate(locale, "stepper.value", { label, value })}
+        >
           {value}
         </output>
         <button
@@ -42,7 +50,7 @@ export function Stepper({
           className="stepper-button"
           onClick={() => onChange(Math.min(max, value + 1))}
           disabled={value >= max}
-          aria-label={`Add one ${label.toLowerCase()}`}
+          aria-label={translate(locale, "stepper.add", { label })}
         >
           +
         </button>

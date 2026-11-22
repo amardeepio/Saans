@@ -4,7 +4,7 @@ import {
   formatInr,
   formatNumber,
   formatObservedAt,
-  pluralise,
+  pluralize,
   relativeFreshness,
 } from "@/lib/format";
 
@@ -31,10 +31,10 @@ describe("display formatting", () => {
     expect(formatObservedAt("not-a-date")).toBe("recently");
   });
 
-  it("pluralises singular and plural labels", () => {
-    expect(pluralise(1, "city")).toBe("1 city");
-    expect(pluralise(3, "city")).toBe("3 cities");
-    expect(pluralise(2, "match", "matches")).toBe("2 matches");
+  it("pluralizes singular and plural labels", () => {
+    expect(pluralize(1, "city")).toBe("1 city");
+    expect(pluralize(3, "city")).toBe("3 cities");
+    expect(pluralize(2, "match", "matches")).toBe("2 matches");
   });
 
   it("describes freshness in human terms", () => {

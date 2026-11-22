@@ -1,5 +1,6 @@
 import { CITIES } from "./cities";
-import type { City } from "./types";
+import { sampleReading } from "./sample-air";
+import type { AirReading, City, CityDetail } from "./types";
 
 /**
  * A deliberately transparent ranking universe. Open-Meteo does not provide a
@@ -48,5 +49,31 @@ export function isIndianGeocodeResult(result: {
   return (
     result.country_code?.toUpperCase() === "IN" ||
     result.country?.trim().toLowerCase() === "india"
+  );
+}
+
+/** Drops the hourly series when a screen only needs the summary card. */
+export function toCityDetail(reading: AirReading): CityDetail {
+  return {
+    city: reading.city,
+    observedAt: reading.observedAt,
+    aqi: reading.aqi,
+    category: reading.category,
+    categoryLabel: reading.categoryLabel,
+    source: reading.source,
+    weather: reading.weather,
+    pm25: reading.pm25,
+    pm10: reading.pm10,
+    co: reading.co,
+    so2: reading.so2,
+    no2: reading.no2,
+    o3: reading.o3,
+  };
+}
+
+/** Offline-safe ranking used before the live endpoint responds. */
+export function sampleIndiaRanking(): CityDetail[] {
+  return INDIA_TRACKED_CITIES.map((city) => toCityDetail(sampleReading(city))).sort(
+    (a, b) => b.aqi - a.aqi,
   );
 }

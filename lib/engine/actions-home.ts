@@ -260,7 +260,7 @@ export function buildHomeActions(ctx: AdviceContext): PlanAction[] {
         "A five-minute wipe removes the dust that settles on surfaces — without launching it back into the air.",
       steps: [
         "Use a damp cloth or mop rather than a dry broom or feather duster.",
-        "Prioritise window sills, bedside tables and the floor where a child plays.",
+        "Prioritize window sills, bedside tables and the floor where a child plays.",
         "Put mats at doors and take shoes off inside.",
       ],
       why: "Settled dust is a reservoir of particles and allergens. Wet cleaning removes it instead of resuspending it, and it is free. Skip air fresheners — they add VOCs rather than removing anything.",

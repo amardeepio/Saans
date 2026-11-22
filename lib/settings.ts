@@ -1,4 +1,5 @@
 import { isLocale } from "./i18n";
+import { readStoredJson, writeStoredJson } from "./storage";
 import type { AqiStandard, Locale } from "./types";
 
 export interface AlertPreferences {
@@ -50,7 +51,7 @@ function time(value: unknown, fallback: string): string {
   return typeof value === "string" && /^\d{2}:\d{2}$/.test(value) ? value : fallback;
 }
 
-export function sanitiseSettings(value: unknown): AppSettings {
+export function sanitizeSettings(value: unknown): AppSettings {
   const input = object(value);
   const alertInput = object(input.alerts);
   const threshold = Number(alertInput.threshold);
@@ -80,25 +81,18 @@ export function sanitiseSettings(value: unknown): AppSettings {
 }
 
 export function loadSettings(): AppSettings {
-  if (typeof window === "undefined") return DEFAULT_SETTINGS;
-  try {
-    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (!parsed || parsed.version !== 1) return DEFAULT_SETTINGS;
-    return sanitiseSettings(parsed);
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
+  return readStoredJson(
+    SETTINGS_STORAGE_KEY,
+    (value) => {
+      const parsed = value as Record<string, unknown> | null;
+      return parsed && parsed.version === 1 ? sanitizeSettings(parsed) : null;
+    },
+    DEFAULT_SETTINGS,
+  );
 }
 
 export function saveSettings(settings: AppSettings): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Private browsing can block storage. The session still works.
-  }
+  writeStoredJson(SETTINGS_STORAGE_KEY, settings);
 }
 
 export function localeDirection(locale: Locale): "ltr" | "rtl" {

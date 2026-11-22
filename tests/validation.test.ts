@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PROFILE } from "@/lib/cities";
 import {
-  deserialiseProfile,
-  sanitiseAirReading,
-  sanitiseChatText,
-  sanitiseCity,
-  sanitiseProfile,
-  serialiseProfile,
+  deserializeProfile,
+  sanitizeAirReading,
+  sanitizeChatText,
+  sanitizeCity,
+  sanitizeProfile,
+  serializeProfile,
 } from "@/lib/validation";
 
 describe("profile validation", () => {
   it("clamps counts, coordinates and enums from untrusted storage", () => {
-    const profile = sanitiseProfile({
+    const profile = sanitizeProfile({
       displayName: "  The   Verma family ",
       city: {
         id: "x",
@@ -43,26 +43,26 @@ describe("profile validation", () => {
   });
 
   it("never returns an empty priority list", () => {
-    const profile = sanitiseProfile({ priorities: ["bad"] });
+    const profile = sanitizeProfile({ priorities: ["bad"] });
     expect(profile.priorities.length).toBeGreaterThan(0);
   });
 
   it("round-trips through versioned local storage", () => {
-    const serialised = serialiseProfile(DEFAULT_PROFILE);
-    const restored = deserialiseProfile(serialised);
+    const serialized = serializeProfile(DEFAULT_PROFILE);
+    const restored = deserializeProfile(serialized);
     expect(restored?.city.id).toBe(DEFAULT_PROFILE.city.id);
     expect(restored?.household.children).toBe(DEFAULT_PROFILE.household.children);
   });
 
   it("rejects malformed or unversioned storage", () => {
-    expect(deserialiseProfile(null)).toBeNull();
-    expect(deserialiseProfile("not json")).toBeNull();
-    expect(deserialiseProfile('{"profile":{}}')).toBeNull();
-    expect(deserialiseProfile('{"version":2,"profile":{}}')).toBeNull();
+    expect(deserializeProfile(null)).toBeNull();
+    expect(deserializeProfile("not json")).toBeNull();
+    expect(deserializeProfile('{"profile":{}}')).toBeNull();
+    expect(deserializeProfile('{"version":2,"profile":{}}')).toBeNull();
   });
 
   it("validates a city independently", () => {
-    const city = sanitiseCity({
+    const city = sanitizeCity({
       name: "  Jaipur ",
       country: "India",
       latitude: "26.91",
@@ -74,7 +74,7 @@ describe("profile validation", () => {
   });
 
   it("clamps air readings and repairs short forecasts", () => {
-    const air = sanitiseAirReading(
+    const air = sanitizeAirReading(
       {
         aqi: 9000,
         pm25: -50,
@@ -99,14 +99,14 @@ describe("profile validation", () => {
   });
 
   it("rejects an absent or negative AQI", () => {
-    expect(sanitiseAirReading({}, DEFAULT_PROFILE)).toBeNull();
-    expect(sanitiseAirReading({ aqi: -1 }, DEFAULT_PROFILE)).toBeNull();
+    expect(sanitizeAirReading({}, DEFAULT_PROFILE)).toBeNull();
+    expect(sanitizeAirReading({ aqi: -1 }, DEFAULT_PROFILE)).toBeNull();
   });
 
   it("enforces chat length limits", () => {
-    expect(sanitiseChatText("  ")).toBeNull();
-    expect(sanitiseChatText("x".repeat(601))).toBeNull();
-    expect(sanitiseChatText("  hello  ")).toBe("hello");
-    expect(sanitiseChatText(42)).toBeNull();
+    expect(sanitizeChatText("  ")).toBeNull();
+    expect(sanitizeChatText("x".repeat(601))).toBeNull();
+    expect(sanitizeChatText("  hello  ")).toBe("hello");
+    expect(sanitizeChatText(42)).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import { localDateKey } from "./habits";
 import type { AlertPreferences } from "./settings";
+import { readStorage, writeStorage } from "./storage";
 import type { AqiMeasurement } from "./types";
 
 function minutes(time: string): number {
@@ -36,21 +37,11 @@ export function alertDedupeKey(
 }
 
 export function wasAlertShown(key: string): boolean {
-  if (typeof window === "undefined") return true;
-  try {
-    return window.localStorage.getItem(key) === "1";
-  } catch {
-    return true;
-  }
+  return readStorage(key) === "1";
 }
 
 export function markAlertShown(key: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, "1");
-  } catch {
-    // Ignore storage failures.
-  }
+  writeStorage(key, "1");
 }
 
 export async function requestNotificationPermission(): Promise<NotificationPermission> {

@@ -3,9 +3,9 @@ export interface ShareContent {
   scaleLabel: string;
   value: number | string;
   label: string;
-  /** Cleanest outdoor window, already localised. */
+  /** Cleanest outdoor window, already localized. */
   windowLabel?: string;
-  /** One-line positioning, already localised. */
+  /** One-line positioning, already localized. */
   tagline: string;
 }
 

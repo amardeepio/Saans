@@ -2,39 +2,28 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { DEFAULT_PROFILE } from "@/lib/cities";
+import { readStorage, writeStorage } from "@/lib/storage";
 import type { Profile } from "@/lib/types";
 import {
-  deserialiseProfile,
+  deserializeProfile,
   PROFILE_STORAGE_KEY,
-  serialiseProfile,
+  serializeProfile,
 } from "@/lib/validation";
 import { useClientValue } from "./useClientValue";
 
-function readRawProfile(): string | null {
-  try {
-    return window.localStorage.getItem(PROFILE_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
 export function useStoredProfile() {
   const hydrated = useClientValue(() => true, false);
-  const rawStored = useClientValue(readRawProfile, null);
-  const storedProfile = useMemo(() => deserialiseProfile(rawStored), [rawStored]);
+  const rawStored = useClientValue(() => readStorage(PROFILE_STORAGE_KEY), null);
+  const storedProfile = useMemo(() => deserializeProfile(rawStored), [rawStored]);
   const [override, setOverride] = useState<Profile | null>(null);
 
   const profile = override ?? storedProfile ?? DEFAULT_PROFILE;
-  const personalised = override !== null || storedProfile !== null;
+  const personalized = override !== null || storedProfile !== null;
 
   const saveProfile = useCallback((next: Profile) => {
     setOverride(next);
-    try {
-      window.localStorage.setItem(PROFILE_STORAGE_KEY, serialiseProfile(next));
-    } catch {
-      // Storage may be unavailable in private browsing; keep in-memory state.
-    }
+    writeStorage(PROFILE_STORAGE_KEY, serializeProfile(next));
   }, []);
 
-  return { profile, setProfile: setOverride, saveProfile, personalised, hydrated };
+  return { profile, setProfile: setOverride, saveProfile, personalized, hydrated };
 }

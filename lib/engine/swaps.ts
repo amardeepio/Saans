@@ -71,7 +71,7 @@ export function pickSwaps(profile: Profile, best: OutdoorWindow): Swap[] {
       id: "clean-cooking",
       title: "Move cooking off solid fuel",
       description:
-        "A subsidised LPG connection, electric induction plate or a community clean-cooking programme removes the single largest indoor smoke source.",
+        "A subsidized LPG connection, electric induction plate or a community clean-cooking programme removes the single largest indoor smoke source.",
       impact: "The biggest indoor-air upgrade available",
       cost: "Ask your municipal helpline about subsidies",
       co2eKgMonth: 6,

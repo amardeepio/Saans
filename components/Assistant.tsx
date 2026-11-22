@@ -6,6 +6,7 @@ import { useClientValue } from "@/hooks/useClientValue";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { onAskSaans } from "@/lib/ask";
 import { sensitiveGroups } from "@/lib/aqi";
+import { CHAT_INPUT_MAX } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
 import { translate } from "@/lib/i18n";
 import { canListen, listenOnce } from "@/lib/speech";
@@ -144,7 +145,9 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
     const started = listenOnce(
       locale,
       (text) => {
-        setInput((current) => (current ? `${current} ${text}` : text).slice(0, 600));
+        setInput((current) =>
+          (current ? `${current} ${text}` : text).slice(0, CHAT_INPUT_MAX),
+        );
         inputRef.current?.focus();
       },
       () => setListening(false),
@@ -239,31 +242,38 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
             </div>
           </header>
 
-          <div className="drawer-context" aria-label="Today's context">
+          <div className="drawer-context" aria-label={translate(locale, "assistant.contextLabel")}>
             <span className="drawer-context-chip">
               <Icon name="shield" size={13} />
-              {profile.household.adults + profile.household.children + profile.household.elders}{" "}
-              people
+              {translate(locale, "assistant.people", {
+                count:
+                  profile.household.adults +
+                  profile.household.children +
+                  profile.household.elders,
+              })}
             </span>
             {groups.length > 0 && (
               <span className="drawer-context-chip drawer-context-chip--warm">
                 <Icon name="users" size={13} />
-                sensitive care
+                {translate(locale, "assistant.sensitiveCare")}
               </span>
             )}
             <span className="drawer-context-chip">
               <Icon name="sun" size={13} />
-              clean {advice.windows.best.label}
+              {translate(locale, "assistant.cleanWindow", { window: advice.windows.best.label })}
             </span>
             <span className="drawer-context-chip">
               <Icon name="wind" size={13} />
-              rough {advice.windows.worst.label}
+              {translate(locale, "assistant.roughWindow", { window: advice.windows.worst.label })}
             </span>
           </div>
 
           <ChatLog logRef={logRef} messages={messages} loading={loading} locale={locale} />
 
-          <div className="chat-suggestions" aria-label="Suggested questions">
+          <div
+            className="chat-suggestions"
+            aria-label={translate(locale, "assistant.suggestionsLabel")}
+          >
             {chips.map((suggestion) => (
               <button
                 key={suggestion}
@@ -279,13 +289,13 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
 
           <form className="chat-form" onSubmit={submit}>
             <label className="sr-only" htmlFor="chat-input">
-              Ask the Saans assistant a question
+              {translate(locale, "assistant.inputLabel")}
             </label>
             <textarea
               id="chat-input"
               ref={inputRef}
               rows={1}
-              maxLength={600}
+              maxLength={CHAT_INPUT_MAX}
               placeholder={translate(locale, "assistant.placeholder")}
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -296,7 +306,7 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
               <button
                 type="button"
                 className={`chat-mic ${listening ? "is-listening" : ""}`}
-                aria-label="Speak your question"
+                aria-label={translate(locale, "assistant.micLabel")}
                 aria-pressed={listening}
                 onClick={startListening}
                 disabled={loading}
@@ -316,7 +326,9 @@ export function Assistant({ profile, air, advice, open, onOpenChange }: Assistan
           <div className="chat-footnote">
             <span>{translate(locale, "assistant.enter")}</span>
             <span>
-              {input.length > 0 ? `${input.length}/600` : translate(locale, "assistant.notMedical")}
+              {input.length > 0
+                ? `${input.length}/${CHAT_INPUT_MAX}`
+                : translate(locale, "assistant.notMedical")}
             </span>
           </div>
           {note && (

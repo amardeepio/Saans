@@ -1,13 +1,15 @@
 "use client";
 
 import type { RefObject } from "react";
-import type { Budget, Priority, Profile } from "@/lib/types";
+import { translate, type TranslationKey } from "@/lib/i18n";
+import type { Budget, Locale, Priority, Profile } from "@/lib/types";
 import { Icon } from "../Icon";
 import { Choice, Toggle } from "./FormControls";
 
 interface RoutineStepProps {
   headingRef: RefObject<HTMLHeadingElement | null>;
   draft: Profile;
+  locale: Locale;
   onUpdateMobility: <Key extends keyof Profile["mobility"]>(
     key: Key,
     value: Profile["mobility"][Key],
@@ -17,30 +19,31 @@ interface RoutineStepProps {
 }
 
 const MOBILITY_OPTIONS = [
-  ["walk", "Walk"],
-  ["cycle", "Cycle"],
-  ["two-wheeler", "Two-wheeler"],
-  ["car", "Car"],
-  ["bus", "Bus"],
-  ["metro", "Metro"],
-] as const;
+  ["walk", "setup.walk"],
+  ["cycle", "setup.cycle"],
+  ["two-wheeler", "setup.twoWheeler"],
+  ["car", "setup.car"],
+  ["bus", "setup.bus"],
+  ["metro", "setup.metro"],
+] as const satisfies ReadonlyArray<readonly [Profile["mobility"]["primary"], TranslationKey]>;
 
-const BUDGET_OPTIONS: Array<{ value: Budget; label: string }> = [
-  { value: "lean", label: "Keep it free" },
-  { value: "balanced", label: "A little to spend" },
-  { value: "comfortable", label: "Invest for comfort" },
+const BUDGET_OPTIONS: ReadonlyArray<readonly [Budget, TranslationKey]> = [
+  ["lean", "setup.lean"],
+  ["balanced", "setup.balanced"],
+  ["comfortable", "setup.comfortable"],
 ];
 
-const PRIORITY_OPTIONS: Array<{ value: Priority; label: string }> = [
-  { value: "health", label: "Protect health" },
-  { value: "planet", label: "Cut emissions" },
-  { value: "cost", label: "Save money" },
-  { value: "comfort", label: "Keep it simple" },
+const PRIORITY_OPTIONS: ReadonlyArray<readonly [Priority, TranslationKey]> = [
+  ["health", "setup.health"],
+  ["planet", "setup.planet"],
+  ["cost", "setup.costPriority"],
+  ["comfort", "setup.comfort"],
 ];
 
 export function RoutineStep({
   headingRef,
   draft,
+  locale,
   onUpdateMobility,
   onUpdateBudget,
   onTogglePriority,
@@ -51,17 +54,14 @@ export function RoutineStep({
         <Icon name="mobility" size={25} />
       </span>
       <h2 id="setup-title" ref={headingRef} tabIndex={-1}>
-        How does your week move?
+        {translate(locale, "setup.weekTitle")}
       </h2>
-      <p className="setup-lede">
-        Commutes are where many households meet their highest pollution. Saans uses this to suggest
-        a cleaner route, not a guilt trip.
-      </p>
+      <p className="setup-lede">{translate(locale, "setup.weekLede")}</p>
 
       <fieldset className="field-block">
-        <legend className="field-label">Usual way to get around</legend>
+        <legend className="field-label">{translate(locale, "setup.mobility")}</legend>
         <div className="choice-grid choice-grid--three">
-          {MOBILITY_OPTIONS.map(([value, label]) => (
+          {MOBILITY_OPTIONS.map(([value, key]) => (
             <Choice
               key={value}
               name="mobility"
@@ -69,7 +69,7 @@ export function RoutineStep({
               selected={draft.mobility.primary === value}
               onSelect={(next) => onUpdateMobility("primary", next)}
             >
-              {label}
+              {translate(locale, key)}
             </Choice>
           ))}
         </div>
@@ -77,8 +77,10 @@ export function RoutineStep({
 
       <div className="field-block slider-block">
         <label className="field-label" htmlFor="commute-minutes">
-          One-way commute{" "}
-          <output htmlFor="commute-minutes">{draft.mobility.commuteMinutes} min</output>
+          {translate(locale, "setup.commute")}{" "}
+          <output htmlFor="commute-minutes">
+            {translate(locale, "setup.minutes", { value: draft.mobility.commuteMinutes })}
+          </output>
         </label>
         <input
           id="commute-minutes"
@@ -90,8 +92,8 @@ export function RoutineStep({
           onChange={(event) => onUpdateMobility("commuteMinutes", Number(event.target.value))}
         />
         <div className="range-labels" aria-hidden="true">
-          <span>At home</span>
-          <span>2 hours</span>
+          <span>{translate(locale, "setup.atHome")}</span>
+          <span>{translate(locale, "setup.twoHours")}</span>
         </div>
       </div>
 
@@ -100,20 +102,20 @@ export function RoutineStep({
           checked={draft.mobility.schoolRun}
           onChange={(value) => onUpdateMobility("schoolRun", value)}
         >
-          I do a school run
+          {translate(locale, "setup.schoolRun")}
         </Toggle>
         <Toggle
           checked={draft.mobility.workFromHomeDays > 1}
           onChange={(value) => onUpdateMobility("workFromHomeDays", value ? 2 : 0)}
         >
-          I can work from home on smog days
+          {translate(locale, "setup.workFromHome")}
         </Toggle>
       </div>
 
       <fieldset className="field-block">
-        <legend className="field-label">Budget for changes</legend>
+        <legend className="field-label">{translate(locale, "setup.budget")}</legend>
         <div className="choice-grid choice-grid--three">
-          {BUDGET_OPTIONS.map(({ value, label }) => (
+          {BUDGET_OPTIONS.map(([value, key]) => (
             <Choice
               key={value}
               name="budget"
@@ -121,22 +123,22 @@ export function RoutineStep({
               selected={draft.budget === value}
               onSelect={onUpdateBudget}
             >
-              {label}
+              {translate(locale, key)}
             </Choice>
           ))}
         </div>
       </fieldset>
 
       <fieldset className="field-block">
-        <legend className="field-label">What should Saans optimise for?</legend>
+        <legend className="field-label">{translate(locale, "setup.optimize")}</legend>
         <div className="toggle-row">
-          {PRIORITY_OPTIONS.map((option) => (
+          {PRIORITY_OPTIONS.map(([value, key]) => (
             <Toggle
-              key={option.value}
-              checked={draft.priorities.includes(option.value)}
-              onChange={() => onTogglePriority(option.value)}
+              key={value}
+              checked={draft.priorities.includes(value)}
+              onChange={() => onTogglePriority(value)}
             >
-              {option.label}
+              {translate(locale, key)}
             </Toggle>
           ))}
         </div>

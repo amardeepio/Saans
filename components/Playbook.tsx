@@ -20,29 +20,31 @@ const CATEGORY_ICONS: Record<PlanAction["category"], IconName> = {
   community: "users",
 };
 
-function ImpactChips({ action }: { action: PlanAction }) {
+function ImpactChips({ action, locale }: { action: PlanAction; locale: "en" | "hi" }) {
   return (
-    <div className="impact-chips" aria-label="Estimated impact">
+    <div className="impact-chips" aria-label={translate(locale, "impact.label")}>
       {action.impact.exposurePct > 0 && (
         <span className="impact-chip impact-chip--health">
           <Icon name="shield" size={13} />
-          ≈{action.impact.exposurePct}% less exposure
+          {translate(locale, "impact.exposure", { pct: action.impact.exposurePct })}
         </span>
       )}
       {action.impact.co2eKgMonth > 0 && (
         <span className="impact-chip impact-chip--planet">
           <Icon name="leaf" size={13} />
-          {formatDecimal(action.impact.co2eKgMonth)} kg CO₂e/mo
+          {translate(locale, "impact.co2e", {
+            value: formatDecimal(action.impact.co2eKgMonth),
+          })}
         </span>
       )}
       {action.impact.costInrMonth > 0 && (
         <span className="impact-chip impact-chip--cost">
-          {formatInr(action.impact.costInrMonth)} saved/mo
+          {translate(locale, "impact.saved", { amount: formatInr(action.impact.costInrMonth) })}
         </span>
       )}
       {action.impact.costInrMonth < 0 && (
         <span className="impact-chip impact-chip--cost">
-          ≈{formatInr(action.impact.costInrMonth)}/mo
+          {translate(locale, "impact.cost", { amount: formatInr(action.impact.costInrMonth) })}
         </span>
       )}
     </div>
@@ -88,7 +90,7 @@ function ActionItem({
               </div>
               <h3>{action.title}</h3>
               <p>{action.summary}</p>
-              <ImpactChips action={action} />
+              <ImpactChips action={action} locale={locale} />
             </div>
           </div>
           <span className="detail-chevron" aria-hidden="true">
@@ -112,9 +114,7 @@ function ActionItem({
               type="button"
               className="ask-saans"
               onClick={() =>
-                askSaans(
-                  `Help me do this today: “${action.title}”. Why does it matter for my household, and what is the first step?`,
-                )
+                askSaans(translate(locale, "playbook.askHelp", { title: action.title }))
               }
             >
               <Icon name="chat" size={13} />
@@ -280,7 +280,7 @@ export function Playbook({
       />
 
       <div className="playbook-layout">
-        <ol className="timeline" aria-label="Today's actions in time order">
+        <ol className="timeline" aria-label={translate(locale, "playbook.timelineLabel")}>
           {advice.actions.map((action, index) => (
             <ActionItem
               key={action.id}
@@ -294,7 +294,7 @@ export function Playbook({
           ))}
         </ol>
 
-        <aside className="playbook-rail" aria-label="Today's context">
+        <aside className="playbook-rail" aria-label={translate(locale, "assistant.contextLabel")}>
           <div className={`rail-card risk-card risk-${advice.risk}`}>
             <div className="rail-heading">
               <span className="eyebrow">{translate(locale, "playbook.householdRead")}</span>

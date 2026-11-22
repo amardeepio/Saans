@@ -54,7 +54,7 @@ function text(value: unknown, fallback: string, maxLength: number): string {
   return trimmed.length > 0 ? trimmed : fallback;
 }
 
-export function sanitiseCity(value: unknown, fallback: City = DEFAULT_PROFILE.city): City {
+export function sanitizeCity(value: unknown, fallback: City = DEFAULT_PROFILE.city): City {
   const input = object(value);
   const latitude = Number(input.latitude);
   const longitude = Number(input.longitude);
@@ -75,7 +75,7 @@ export function sanitiseCity(value: unknown, fallback: City = DEFAULT_PROFILE.ci
   };
 }
 
-export function sanitiseProfile(value: unknown): Profile {
+export function sanitizeProfile(value: unknown): Profile {
   const input = object(value);
   const fallback = DEFAULT_PROFILE;
   const householdInput = object(input.household);
@@ -118,7 +118,7 @@ export function sanitiseProfile(value: unknown): Profile {
 
   return {
     displayName: text(input.displayName, fallback.displayName, 40),
-    city: sanitiseCity(input.city, fallback.city),
+    city: sanitizeCity(input.city, fallback.city),
     household,
     home,
     mobility,
@@ -128,7 +128,7 @@ export function sanitiseProfile(value: unknown): Profile {
   };
 }
 
-export function sanitiseAirReading(value: unknown, profile: Profile): AirReading | null {
+export function sanitizeAirReading(value: unknown, profile: Profile): AirReading | null {
   const input = object(value);
   const aqi = int(input.aqi, -1, -1, 500);
   if (aqi < 0) return null;
@@ -198,7 +198,7 @@ export function sanitiseAirReading(value: unknown, profile: Profile): AirReading
   };
 }
 
-export function sanitiseChatText(value: unknown): string | null {
+export function sanitizeChatText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (trimmed.length < 1 || trimmed.length > 600) return null;
@@ -207,16 +207,16 @@ export function sanitiseChatText(value: unknown): string | null {
 
 export const PROFILE_STORAGE_KEY = "saans.profile.v1";
 
-export function serialiseProfile(profile: Profile): string {
+export function serializeProfile(profile: Profile): string {
   return JSON.stringify({ version: 1, profile });
 }
 
-export function deserialiseProfile(raw: string | null): Profile | null {
+export function deserializeProfile(raw: string | null): Profile | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (!parsed || parsed.version !== 1 || !parsed.profile) return null;
-    return sanitiseProfile(parsed.profile);
+    return sanitizeProfile(parsed.profile);
   } catch {
     return null;
   }

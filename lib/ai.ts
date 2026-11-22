@@ -243,6 +243,24 @@ export async function askGenAi(
 }
 
 /**
+ * Parses one server-sent-event frame. Returns an empty string for keep-alives,
+ * the `[DONE]` marker and partial frames.
+ */
+function streamDelta(line: string): string {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("data:")) return "";
+  const payload = trimmed.slice(5).trim();
+  if (!payload || payload === "[DONE]") return "";
+  try {
+    const chunk = JSON.parse(payload) as StreamChunk;
+    const delta = chunk.choices?.[0]?.delta?.content;
+    return typeof delta === "string" ? delta : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Streams the model's answer as plain-text deltas. Yields nothing when the
  * provider is unavailable, so the caller can fall back to the local answer.
  *
@@ -285,17 +303,8 @@ export async function* streamGenAi(
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) continue;
-        const payload = trimmed.slice(5).trim();
-        if (!payload || payload === "[DONE]") continue;
-        try {
-          const chunk = JSON.parse(payload) as StreamChunk;
-          const delta = chunk.choices?.[0]?.delta?.content;
-          if (typeof delta === "string" && delta) yield delta;
-        } catch {
-          // Keep-alive or a partial frame: ignore and keep reading.
-        }
+        const delta = streamDelta(line);
+        if (delta) yield delta;
       }
     }
   } finally {

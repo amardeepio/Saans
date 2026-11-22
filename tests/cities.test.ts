@@ -10,7 +10,7 @@ describe("city catalogue", () => {
     expect(cityLabel(CITIES.find((city) => city.id === "chandigarh")!)).toBe("Chandigarh");
   });
 
-  it("serialises city coordinates and optional region into query parameters", () => {
+  it("serializes city coordinates and optional region into query parameters", () => {
     const withRegion = new URLSearchParams(buildCityQuery(DEFAULT_PROFILE.city));
     expect(withRegion.get("id")).toBe("delhi");
     expect(withRegion.get("region")).toBe("NCT");
